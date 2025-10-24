@@ -1,0 +1,4 @@
+ModuleNotFoundError in file "/home/runner/work/cfmm2bids/cfmm2bids/workflow/Snakefile", line 2:
+No module named 'cfmm2tar'
+  File "/home/runner/work/cfmm2bids/cfmm2bids/workflow/Snakefile", line 2, in <module>
+  File "/home/runner/work/cfmm2bids/cfmm2bids/workflow/lib/query_filter.py", line 2, in <module>

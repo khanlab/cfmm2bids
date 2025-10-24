@@ -7,6 +7,7 @@ A Snakemake workflow for converting CFMM DICOM data to BIDS format using heudico
 - Download DICOM studies from CFMM
 - Convert DICOM to BIDS format using heudiconv
 - Generate quality control (QC) reports for each subject/session
+- Optional reorientation of images to a specified orientation (e.g., RIA)
 
 ## QC Reports
 
@@ -31,6 +32,34 @@ sourcedata/qc/
 ```
 
 **Note:** The QC report generation is integrated into the Snakemake workflow as a script directive and cannot be run manually as a standalone CLI tool.
+
+## Reorientation
+
+The workflow can optionally reorient all NIfTI images to a specified orientation. This is controlled by the `reorient` section in `config.yml`:
+
+```yaml
+reorient:
+  do_reorient: True
+  orientation: 'RIA'  # Target orientation (e.g., RAS, RIA, LAS, etc.)
+```
+
+When enabled, the workflow will:
+1. Process all NIfTI images in `bids/sub-{subject}/ses-{session}` directories
+2. Apply the specified reorientation transformation to the affine matrix
+3. Write reoriented images to `bids_reorient/sub-{subject}/ses-{session}` directories
+4. Copy all non-NIfTI files (JSON sidecars, etc.) to maintain BIDS structure
+
+The reorientation uses the following orientation codes:
+- **R**ight, **L**eft: First axis (left-right)
+- **A**nterior, **P**osterior: Second axis (front-back)
+- **S**uperior, **I**nferior: Third axis (top-bottom)
+
+Common orientations:
+- **RAS**: Standard neurological orientation (Right-Anterior-Superior)
+- **RIA**: Right-Inferior-Anterior
+- **LAS**: Left-Anterior-Superior
+
+Set `do_reorient: False` or omit the `reorient` section to disable this feature.
 
 ## Usage
 
@@ -65,7 +94,9 @@ sourcedata/qc/
 ```
 .
 ├── bids/                       # BIDS-formatted output
-│   └──sub-*/ses-*/            # Downloaded DICOMs
+│   └──sub-*/ses-*/            # BIDS session directories
+├── bids_reorient/              # Reoriented images (if enabled)
+│   └──sub-*/ses-*/            # Reoriented BIDS session directories
 └── sourcedata/                 # Source DICOM data
     ├── sub-*/ses-*/           # Downloaded DICOMs
     ├── heudiconv/             # Heudiconv metadata
