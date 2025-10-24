@@ -35,3 +35,7 @@ post_filter_specs:
   exclude:
     - StudyInstanceUID == '2.16.756.5.5.200.8323328.24337.1724894202.13553'
 
+reorient:
+  do_reorient: True
+  orientation: 'RIA'
+

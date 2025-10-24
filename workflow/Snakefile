@@ -46,12 +46,23 @@ qc_report_targets = expand(
     session=df.session
 )
 
+# Build reorient targets (if enabled)
+reorient_targets = []
+if config.get('reorient', {}).get('do_reorient', False):
+    reorient_targets = expand(
+        'bids_reorient/sub-{subject}/ses-{session}',
+        zip,
+        subject=df.subject,
+        session=df.session
+    )
+
 
 rule all:
     input: 
         sub_ses_targets,
         'bids/dataset_description.json',
-        qc_report_targets
+        qc_report_targets,
+        reorient_targets
 
 
 def get_uid_from_wildcards(wildcards):
@@ -154,4 +165,21 @@ rule generate_qc_report:
     group: 'convert'
     script:
         'scripts/generate_qc_report.py'
+
+
+rule reorient:
+    input:
+        bids_subj_dir='bids/sub-{subject}/ses-{session}'
+    params:
+        orientation=config.get('reorient', {}).get('orientation', 'RAS')
+    output:
+        reoriented_subj_dir=directory('bids_reorient/sub-{subject}/ses-{session}')
+    log:
+        'logs/reorient/sub-{subject}_ses-{session}.log'
+    threads: 1
+    resources:
+        mem_mb=8000,
+        runtime=15
+    script:
+        'scripts/reorient.py'
 

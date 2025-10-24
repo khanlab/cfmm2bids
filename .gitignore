@@ -9,6 +9,7 @@ __pycache__/
 
 # Generated outputs
 bids/
+bids_reorient/
 sourcedata/
 qc/
 logs/
