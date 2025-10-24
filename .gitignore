@@ -3,6 +3,9 @@
 .pixi
 *.egg-info
 
+# Snakemake
+.snakemake
+
 # Python cache
 __pycache__/
 *.pyc
