@@ -93,7 +93,8 @@ def reset_orientation(path: Path, spec: dict) -> bool:
     new_affine = nib.affines.from_matvec(mat, new_vec)
     
     # Create new image with updated affine
-    img_reset = nib.Nifti1Image(img_canonical.get_fdata(), new_affine, img_canonical.header)
+    # Note: as_closest_canonical may have already loaded data into memory if reordering was needed
+    img_reset = nib.Nifti1Image(img_canonical.dataobj, new_affine, img_canonical.header)
     
     # Save the result
     nib.save(img_reset, str(path))
