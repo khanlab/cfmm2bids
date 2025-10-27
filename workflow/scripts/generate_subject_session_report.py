@@ -67,7 +67,10 @@ def parse_auto_txt(auto_txt_path):
     for key, series_id_list in data.items():
         # Use the full BIDS filename pattern from the last element
         # key structure: (modality, suffix, ..., filename_pattern)
-        bids_pattern = key[-1] if len(key) > 0 else str(key)
+        if isinstance(key, (tuple, list)) and len(key) > 0:
+            bids_pattern = key[-1]
+        else:
+            bids_pattern = str(key)
         
         for item, series_id in enumerate(series_id_list, 1):
             if isinstance(series_id, dict):
