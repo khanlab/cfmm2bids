@@ -7,10 +7,10 @@ They are auto-registered via the @register_fix decorator.
 """
 
 import json
-import nibabel as nib
-import numpy as np
 from pathlib import Path
 
+import nibabel as nib
+import numpy as np
 
 # --- global registry ---
 FIX_REGISTRY = {}
@@ -68,34 +68,34 @@ def reset_orientation(path: Path, spec: dict) -> bool:
     """Reorder affine and volume to canonical, then reset origin to center (for quadrupeds imaged with wrong orientation)."""
     if not any(path.name.endswith(ext) for ext in [".nii", ".nii.gz"]):
         return False
-    
+
     # Load the image
     img = nib.load(str(path))
-    
+
     # Step 1: Reorder to canonical orientation
     img_canonical = nib.as_closest_canonical(img)
-    
+
     # Step 2: Reset the origin to center of volume
     # Extract the rotation/scaling matrix and current translation
     affine = img_canonical.affine
     mat, vec = nib.affines.to_matvec(affine)
-    
+
     # Calculate center voxel coordinates
     shape = img_canonical.shape[:3]  # only spatial dimensions
     center_voxel = [(s - 1) / 2.0 for s in shape]
-    
+
     # Calculate new translation so center voxel maps to world origin (0,0,0)
     # world = mat @ voxel + vec, we want world = 0 at center
     # so: vec_new = -mat @ center_voxel
     new_vec = -mat @ np.array(center_voxel)
-    
+
     # Create new affine with reset origin
     new_affine = nib.affines.from_matvec(mat, new_vec)
-    
+
     # Create new image with updated affine
     # Note: as_closest_canonical may have already loaded data into memory if reordering was needed
     img_reset = nib.Nifti1Image(img_canonical.dataobj, new_affine, img_canonical.header)
-    
+
     # Save the result
     nib.save(img_reset, str(path))
     return True
