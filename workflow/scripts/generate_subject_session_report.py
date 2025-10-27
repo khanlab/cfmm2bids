@@ -169,13 +169,38 @@ def create_datavzrd_config(tsv_path, json_path, output_path):
         json_path: Path to the aggregated JSON file
         output_path: Path to save the config file
     """
+    # Read JSON to include metadata in the report description
+    with open(json_path, 'r') as f:
+        metadata = json.load(f)
+    
+    # Create description with JSON metadata
+    description = f"""
+# Subject/Session Summary Report
+
+**Subject:** {metadata['subject']}  
+**Session:** {metadata['session']}  
+**Report Generated:** {metadata['report_generated']}
+
+## Summary Statistics
+- Total Series: {metadata['summary']['total_series']}
+- Mapped Series: {metadata['summary']['mapped_series']}
+- Unmapped Series: {metadata['summary']['unmapped_series']}
+- Mapping Rate: {metadata['summary']['mapping_rate']}
+
+## Post-Conversion Fixes
+- Fixes Applied: {', '.join(metadata['stages']['fix']['fixes_applied']) if metadata['stages']['fix']['fixes_applied'] else 'None'}
+- Files Modified: {metadata['stages']['fix']['files_modified']}
+
+---
+"""
+    
     config = {
         'name': 'Subject/Session Summary Report',
+        'description': description,
         'datasets': {
             'series_info': {
-                'path': str(tsv_path),
-                'separator': '\t',
-                'headers': 1
+                'path': str(Path(tsv_path).name),
+                'separator': '\\t'
             }
         },
         'views': {
@@ -184,14 +209,8 @@ def create_datavzrd_config(tsv_path, json_path, output_path):
                 'page-size': 50,
                 'render-table': {
                     'columns': {
-                        'series_id': {
-                            'plot': {
-                                'ticks': {
-                                    'scale': 'ordinal'
-                                }
-                            }
-                        },
                         'is_mapped': {
+                            'display-mode': 'detail',
                             'plot': {
                                 'heatmap': {
                                     'scale': 'ordinal',
@@ -200,11 +219,13 @@ def create_datavzrd_config(tsv_path, json_path, output_path):
                             }
                         },
                         'TR_ms': {
+                            'display-mode': 'detail',
                             'plot': {
                                 'bars': {}
                             }
                         },
                         'TE_ms': {
+                            'display-mode': 'detail',
                             'plot': {
                                 'bars': {}
                             }
@@ -219,6 +240,7 @@ def create_datavzrd_config(tsv_path, json_path, output_path):
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
     
     logger.info(f"Saved datavzrd config to {output_path}")
+
 
 
 
@@ -252,8 +274,8 @@ summary_df = create_aggregated_tsv(dicominfo_df, mappings, prov_data, aggregated
 metadata = create_aggregated_json(subject, session, dicominfo_df, mappings, 
                                    filegroup_data, prov_data, aggregated_json)
 
-# Create datavzrd config
-create_datavzrd_config(Path(aggregated_tsv).name, Path(aggregated_json).name, datavzrd_config)
+# Create datavzrd config (pass full path to json for reading, but use just filename in config)
+create_datavzrd_config(aggregated_tsv, aggregated_json, datavzrd_config)
 
 logger.info(f"Report generation complete for sub-{subject}/ses-{session}")
 logger.info(f"  Total series: {metadata['summary']['total_series']}")

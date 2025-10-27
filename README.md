@@ -7,6 +7,7 @@ A Snakemake workflow for converting CFMM DICOM data to BIDS format using heudico
 - Download DICOM studies from CFMM
 - Convert DICOM to BIDS format using heudiconv
 - Generate quality control (QC) reports for each subject/session
+- Generate comprehensive summary reports with interactive visualizations
 
 ## QC Reports
 
@@ -31,6 +32,40 @@ sourcedata/qc/
 ```
 
 **Note:** The QC report generation is integrated into the Snakemake workflow as a script directive and cannot be run manually as a standalone CLI tool.
+
+## Summary Reports
+
+The workflow can generate comprehensive summary reports for each subject/session that aggregate information from all processing stages. To generate summary reports, run:
+
+```bash
+pixi run snakemake --cores all report
+```
+
+Each summary report includes:
+
+1. **Interactive HTML Report** (`report.html`): An interactive table rendered with [datavzrd](https://datavzrd.github.io/) containing:
+   - Metadata summary (subject, session, conversion statistics)
+   - Post-conversion fixes applied
+   - Interactive table of all DICOM series with BIDS mappings
+   - Visualization of mapping statistics and imaging parameters
+
+2. **Aggregated JSON** (`*_summary.json`): Machine-readable metadata including:
+   - Summary statistics (total series, mapped/unmapped counts)
+   - Processing stage information
+   - Applied post-conversion fixes
+
+3. **Aggregated TSV** (`*_summary.tsv`): Tab-separated table with detailed series information
+
+Summary reports are saved in the `results/5_report/` directory with the structure:
+```
+results/5_report/
+└── sub-{subject}/
+    └── ses-{session}/
+        ├── report.html
+        ├── sub-{subject}_ses-{session}_summary.json
+        └── sub-{subject}_ses-{session}_summary.tsv
+```
+
 
 ## Usage
 
@@ -65,11 +100,21 @@ sourcedata/qc/
 ```
 .
 ├── bids/                       # BIDS-formatted output
-│   └──sub-*/ses-*/            # Downloaded DICOMs
-└── sourcedata/                 # Source DICOM data
-    ├── sub-*/ses-*/           # Downloaded DICOMs
-    ├── heudiconv/             # Heudiconv metadata
-    └── qc/                    # QC reports
+│   └──sub-*/ses-*/            # Subject/session data
+├── results/                    # Intermediate processing results
+│   ├── 0_query/               # Initial DICOM query results
+│   ├── 1_filter/              # Filtered study list
+│   ├── 2_download/            # Downloaded DICOMs
+│   ├── 3_convert/             # Heudiconv conversion outputs
+│   │   ├── bids/              # Initial BIDS conversion
+│   │   ├── info/              # Conversion metadata
+│   │   └── qc/                # QC reports (SVG figures)
+│   ├── 4_fix/                 # Post-conversion fixes
+│   │   ├── bids/              # Fixed BIDS data
+│   │   └── info/              # Fix provenance
+│   └── 5_report/              # Summary reports
+│       └── sub-*/ses-*/       # Interactive HTML reports
+└── sourcedata/                 # Source DICOM data (deprecated)
 ```
 
 ## Repository Directory Structure
