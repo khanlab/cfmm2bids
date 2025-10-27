@@ -65,7 +65,9 @@ def parse_auto_txt(auto_txt_path):
     series_to_bids = {}
     
     for key, series_id_list in data.items():
-        bids_pattern = f'{key[0]}.{key[1][0]}'
+        # Use the full BIDS filename pattern from the last element
+        # key structure: (modality, suffix, ..., filename_pattern)
+        bids_pattern = key[-1] if len(key) > 0 else str(key)
         
         for item, series_id in enumerate(series_id_list, 1):
             if isinstance(series_id, dict):
@@ -200,7 +202,7 @@ def create_datavzrd_config(tsv_path, json_path, output_path):
         'datasets': {
             'series_info': {
                 'path': str(Path(tsv_path).name),
-                'separator': '\\t'
+                'separator': '\t'
             }
         },
         'views': {
@@ -237,9 +239,10 @@ def create_datavzrd_config(tsv_path, json_path, output_path):
     }
     
     with open(output_path, 'w') as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
     
     logger.info(f"Saved datavzrd config to {output_path}")
+
 
 
 
