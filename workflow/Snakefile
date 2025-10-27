@@ -173,6 +173,8 @@ rule bids_validator:
         mem_mb=4000,
         runtime=10
     shell:
+        # bids-validator-deno package provides the 'bids-validator' command
+        # || true prevents workflow failure when validation errors are found
         'bids-validator bids/ > {output.report} 2>&1 || true'
 
 
