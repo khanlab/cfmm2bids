@@ -11,6 +11,7 @@ stage_filter   = Path(stages.get("filter", "results/1_filter"))
 stage_download = Path(stages.get("download", "results/2_download"))
 stage_convert  = Path(stages.get("convert", "results/3_convert"))
 stage_fix      = Path(stages.get("fix", "results/4_fix"))
+stage_report   = Path(stages.get("report", "results/5_report"))
 
 final_bids_dir = Path(config.get("final_bids_dir", "bids"))
 
@@ -90,6 +91,14 @@ rule fix:
     input:
         validator_json=stage_fix/'qc/bids_validator.json'
 
+rule report:
+    input:
+        expand(
+            stage_report / 'sub-{subject}/ses-{session}/report.html',
+            zip,
+            subject=df.subject,
+            session=df.session
+        )
 
 
 def get_uid_from_wildcards(wildcards):
@@ -279,6 +288,58 @@ rule validate_fix:
         # validate twice, to write to log, to txt, and to json
         'bids-validator-deno {params.bids_dir} --format text &> {log} && '   
         'bids-validator-deno {params.bids_dir} --format json_pp -o {output.validator_json}'
+
+
+# Subject/session report generation
+rule generate_subject_session_report:
+    """
+    Generate aggregated summary report for a subject/session.
+    
+    This rule aggregates information from all stages (convert, fix) and creates:
+    1. Aggregated JSON with metadata
+    2. Aggregated TSV with series information
+    3. Datavzrd configuration file
+    """
+    input:
+        auto_txt=stage_convert / 'info/sub-{subject}/ses-{session}/sub-{subject}_ses-{session}_auto.txt',
+        dicominfo_tsv=stage_convert / 'info/sub-{subject}/ses-{session}/sub-{subject}_ses-{session}_dicominfo.tsv',
+        filegroup_json=stage_convert / 'info/sub-{subject}/ses-{session}/sub-{subject}_ses-{session}_filegroup.json',
+        prov_json=stage_fix / 'info/sub-{subject}/ses-{session}/sub-{subject}_ses-{session}_provenance.json'
+    output:
+        aggregated_json=stage_report / 'sub-{subject}/ses-{session}/sub-{subject}_ses-{session}_summary.json',
+        aggregated_tsv=stage_report / 'sub-{subject}/ses-{session}/sub-{subject}_ses-{session}_summary.tsv',
+        datavzrd_config=stage_report / 'sub-{subject}/ses-{session}/datavzrd_config.yaml'
+    log:
+        'logs/generate_subject_session_report/sub-{subject}_ses-{session}.log'
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    script:
+        'scripts/generate_subject_session_report.py'
+
+
+rule render_subject_session_report:
+    """
+    Render the subject/session report as an interactive HTML using datavzrd.
+    """
+    input:
+        aggregated_tsv=rules.generate_subject_session_report.output.aggregated_tsv,
+        aggregated_json=rules.generate_subject_session_report.output.aggregated_json,
+        datavzrd_config=rules.generate_subject_session_report.output.datavzrd_config
+    output:
+        html_report=stage_report / 'sub-{subject}/ses-{session}/report.html'
+    params:
+        report_dir=lambda wildcards: stage_report / f'sub-{wildcards.subject}/ses-{wildcards.session}'
+    log:
+        'logs/render_subject_session_report/sub-{subject}_ses-{session}.log'
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    shell:
+        "datavzrd {input.datavzrd_config} --output {params.report_dir}/datavzrd_output &> {log} && "
+        "mv {params.report_dir}/datavzrd_output/index.html {output.html_report}"
 
 
 # final_bids_dir
