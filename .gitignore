@@ -12,3 +12,5 @@ bids/
 sourcedata/
 qc/
 logs/
+bids_validator_report.txt
+cfmm2bids_filtered_studies.tsv
