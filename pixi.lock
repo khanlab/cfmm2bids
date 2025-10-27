@@ -251,7 +251,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstandard-0.25.0-py312h5253ce2_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.7-hb8e6e7a_2.conda
       - pypi: https://files.pythonhosted.org/packages/39/e8/806475fe4cdfd8635535d3fa11bd61d19b7cc94b61b9147ebdd2ab4cbbee/acres-0.5.0-py3-none-any.whl
-      - pypi: git+https://github.com/khanlab/cfmm2tar?rev=master#48e9c6a3509514854e9ad36144002b56f5f6108e
+      - pypi: https://files.pythonhosted.org/packages/72/c5/f70faeb1686a8599009ba3d518ee141a55e9051c2019920a58ac8c41844a/bids_validator_deno-2.2.0-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: git+https://github.com/khanlab/cfmm2tar?rev=master#79bef5fc2721d0cc190aab669b089f193e6c2618
       - pypi: https://files.pythonhosted.org/packages/13/c3/8ac768b389d5b6dda1c3ce7992b3acd2b46401f9b71439123858b17b1a2c/ci_info-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bb/62/04cf229c7068327e7026fc9654f7749cd9274e821caa2ac13e4fa0faa2fb/dcmstack-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/83/27/f997c9da0e179986fadd6c8474d16743f1b3697c129c2fcd1e739cd038c2/etelemetry-0.3.1-py3-none-any.whl
@@ -365,6 +366,10 @@ packages:
   - pkg:pypi/attrs?source=compressed-mapping
   size: 60101
   timestamp: 1759762331492
+- pypi: https://files.pythonhosted.org/packages/72/c5/f70faeb1686a8599009ba3d518ee141a55e9051c2019920a58ac8c41844a/bids_validator_deno-2.2.0-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+  name: bids-validator-deno
+  version: 2.2.0
+  sha256: 042b66d6621387301daeddf8fc444032cff15e34fbdfc187f9a606593602195a
 - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-1.1.0-hb03c661_4.conda
   sha256: 294526a54fa13635341729f250d0b1cf8f82cad1e6b83130304cbf3b6d8b74cc
   md5: eaf3fbd2aa97c212336de38a51fe404e
@@ -481,9 +486,9 @@ packages:
   - pkg:pypi/cffi?source=hash-mapping
   size: 296986
   timestamp: 1758716192805
-- pypi: git+https://github.com/khanlab/cfmm2tar?rev=master#48e9c6a3509514854e9ad36144002b56f5f6108e
+- pypi: git+https://github.com/khanlab/cfmm2tar?rev=master#79bef5fc2721d0cc190aab669b089f193e6c2618
   name: cfmm2tar
-  version: 2.0.3.dev68+g48e9c6a35
+  version: 2.0.3.dev78+g79bef5fc2
   requires_dist:
   - pandas>=2.0.0 ; extra == 'dataframe'
   requires_python: '>=3.11'

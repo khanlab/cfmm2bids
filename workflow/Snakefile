@@ -160,21 +160,22 @@ rule generate_qc_report:
         'scripts/generate_qc_report.py'
 
 
-rule bids_validator:
+rule validate:
     input:
         sub_ses_dirs=sub_ses_targets,
         dataset_description='bids/dataset_description.json'
     output:
-        report='bids_validator_report.txt'
-    log:
-        'logs/bids_validator/bids_validator.log'
+        report_txt='qc/bids_validator_report.txt',
+        report_json='qc/bids_validator_report.json'
     threads: 1
     resources:
         mem_mb=4000,
         runtime=10
     shell:
-        # bids-validator-deno package provides the 'bids-validator' command
         # || true prevents workflow failure when validation errors are found
-        'bids-validator bids/ > {output.report} 2>&1 || true'
+        # validate 3 times to write to screen, to txt, and to json
+        'bids-validator-deno bids/ --format text || true && '   
+        'bids-validator-deno bids/ --format text -o {output.report_txt} || true && '   
+        'bids-validator-deno bids/ --format json_pp -o {output.report_json} || true'
 
 
