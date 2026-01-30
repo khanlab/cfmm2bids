@@ -45,6 +45,15 @@ def infotodict(seqinfo):
     subindex: sub index within group
     """
     # anatomical
+    t1w_flash = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-FLASH_run-{item:01d}_T1w"
+    )
+
+    mts_t1w = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-T1w_run-{item:01d}_MTS"
+    )
+
+
     t2w_tse = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TSE_run-{item:01d}_T2w"
     )
@@ -92,9 +101,16 @@ def infotodict(seqinfo):
         "sub-{subject}/{session}/dwi/sub-{subject}_{session}_run-{item:01d}_dwi"
     )
 
+    dwi_multishell = create_key(
+        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-multishell_run-{item:01d}_dwi"
+    )
+
+
     # ==================================================================================================================
 
     info = {
+        t1w_flash: [],
+        mts_t1w: [],
         t2w_tse: [],
         t2w_gre: [],
         t2w_rare_orig: [],
@@ -107,6 +123,7 @@ def infotodict(seqinfo):
         t2w_postgad: [],
         func_resting_R: [],
         func_resting_RV: [],
+        dwi_multishell: [],
         dwi: [],
     }
 
@@ -141,7 +158,7 @@ def infotodict(seqinfo):
     t2w_rare_candidates = []
     for s in seqinfo:
         desc = s.series_description.lower()
-        if "t2_rarevfl" in desc:
+        if "rarevfl" in desc:
             t2w_rare_candidates.append(s)
 
     # Sort by series_id to ensure acquisition order
@@ -206,6 +223,9 @@ def infotodict(seqinfo):
                 info[func_resting_R].append(s.series_id)
 
         # ==================================================diffusion========================================================
+        elif "diff3d_10b0_30b2k_45b4k_60b6k_125iso" in s.series_description.lower(): #replace this with regex search
+            info[dwi_multishell].append(s.series_id)
+
         elif "DWI" in s.series_description:
             info[dwi].append(s.series_id)
 
