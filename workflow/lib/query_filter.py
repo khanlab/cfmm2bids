@@ -295,6 +295,35 @@ def remap_sessions_by_date(
     return df
 
 
+def remap_session_globally(df, session_col="session", session_name="01"):
+    """
+    Remap all session IDs to a single global value.
+
+    This function replaces all session IDs in the dataframe with a single
+    fixed value. This is useful when you want all subjects to have the same
+    session name (e.g., 'ses-15T' for a single-session study or when scanner
+    information should be part of the session name).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Must include session_col column.
+    session_col : str, default='session'
+        Name of session identifier column.
+    session_name : str, default='01'
+        The global session name to use for all sessions.
+        Should be BIDS-compliant (alphanumeric only).
+
+    Returns
+    -------
+    pd.DataFrame
+        Original dataframe with all session values replaced with session_name.
+    """
+    df = df.copy()
+    df[session_col] = session_name
+    return df
+
+
 def post_filter(df, post_filter_specs):
     if not post_filter_specs:
         return df
@@ -305,7 +334,16 @@ def post_filter(df, post_filter_specs):
     for q in post_filter_specs.get("exclude") or []:
         df = df.query(f"not ({q})")
 
-    # Apply session remapping if configured
+    # Apply global session remapping if configured
+    global_remap_config = post_filter_specs.get("remap_session_globally")
+    if global_remap_config and global_remap_config.get("enable", False):
+        df = remap_session_globally(
+            df,
+            session_col=global_remap_config.get("session_col", "session"),
+            session_name=global_remap_config.get("session_name", "01"),
+        )
+
+    # Apply session remapping by date if configured
     remap_config = post_filter_specs.get("remap_sessions_by_date")
     if remap_config and remap_config.get("enable", False):
         df = remap_sessions_by_date(

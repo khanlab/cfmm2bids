@@ -37,6 +37,8 @@ Output: `studies.tsv` - Complete list of matched studies
 Post-filters the queried studies based on include/exclude rules. Features include:
 - Include/exclude filters using pandas query syntax
 - Optional `--config head=N` to process only first N subjects for testing
+- **Global session remapping**: Set all sessions to a single fixed value (e.g., `ses-15T` for single-session studies or to include scanner information)
+- **Time-based session remapping**: Automatically remap sessions based on study date ordering (e.g., `0m`, `6m`, `12m` for longitudinal studies)
 
 Output: `studies_filtered.tsv` - Filtered list of studies to process
 
@@ -144,6 +146,38 @@ study_filter_specs:
   exclude:
     - "StudyInstanceUID == '1.2.3.4.5'"  # Exclude specific study
 ```
+
+#### Session Remapping
+
+Two types of session remapping are available:
+
+**1. Global session remapping** - Set all sessions to a single fixed value:
+```yaml
+study_filter_specs:
+  remap_session_globally:
+    enable: true
+    session_name: '15T'  # All sessions will be named 'ses-15T'
+```
+This is useful for:
+- Single-session studies where all subjects have only one scan
+- Including scanner information in the session name (e.g., `15T` for 15 Tesla)
+- Simplifying session naming when temporal ordering is not important
+
+**2. Time-based session remapping** - Automatically remap sessions based on study date ordering:
+```yaml
+study_filter_specs:
+  remap_sessions_by_date:
+    enable: true
+    units: 'months'
+    round_step: 6
+    time_to_label:
+      0: 'baseline'
+      6: '6mo'
+      12: '12mo'
+```
+This creates session labels like `ses-baseline`, `ses-6mo`, `ses-12mo` based on the time between scans.
+
+**Note:** These remapping options are mutually exclusive in practice. The global remapping is applied first, so if both are enabled, the date-based remapping would operate on the globally remapped sessions (which would all be the same).
 
 ### Download Configuration
 - `cfmm2tar_download_options`: Options passed to cfmm2tar (e.g., `--skip-derived`)

@@ -166,6 +166,30 @@ study_filter_specs:
   exclude:
     # - StudyInstanceUID == '2.16.756.5.5.200.8323328.24337.1724894202.13553'
   
+  # Remap all sessions to a single global name (OPTIONAL)
+  # This feature sets all session IDs to a single fixed value, regardless of
+  # the original session identifier. Useful for:
+  # - Single-session studies where all subjects have only one session
+  # - Including scanner/study information in the session name (e.g., 'ses-15T')
+  # - Simplifying session naming when temporal ordering is not important
+  #
+  # NOTE: This remapping is applied BEFORE remap_sessions_by_date.
+  # You typically would use only one of these remapping options, not both.
+  remap_session_globally:
+    # Enable/disable global session remapping (REQUIRED if section is present)
+    enable: false
+    
+    # Column name (OPTIONAL, default: 'session')
+    # session_col: 'session'
+    
+    # Global session name (OPTIONAL, default: '01')
+    # The value to use for all sessions. Should be BIDS-compliant (alphanumeric).
+    # Examples:
+    #   session_name: '01'    # Simple numbered session
+    #   session_name: '15T'   # Include scanner field strength
+    #   session_name: 'MRI'   # Include modality
+    # session_name: '01'
+  
   # Remap sessions based on study date ordering (OPTIONAL)
   # This feature automatically remaps session IDs to time-based labels
   # based on the temporal ordering of study dates for each subject.
