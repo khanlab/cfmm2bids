@@ -202,6 +202,11 @@ The workflow includes several heuristic files for different scanner configuratio
   
 - **`heuristics/trident_15T.py`**: Trident 15T scanner-specific heuristic
 - **`heuristics/Menon_CogMSv2.py`**: CogMS study-specific heuristic
+- **`heuristics/custom_dwi_bruker.py`**: Custom DWI heuristic for extracting bvec/bval from Bruker DICOM files
+  - Extracts diffusion gradient information from DICOM tags
+  - Writes BIDS-compliant `.bvec` and `.bval` sidecar files
+  - Can be used standalone or imported into other heuristics (see `trident_15T.py` for example)
+  - See `heuristics/README_custom_dwi_bruker.md` for detailed documentation
 
 The heuristics automatically detect and label distortion-corrected (DIS2D/DIS3D) reconstructions using the `rec-DIS2D` or `rec-DIS3D` BIDS suffix.
 
@@ -366,15 +371,13 @@ results/
 │       └── post_convert_fix.py               # Post-conversion fix application
 ├── heuristics/                 # Heudiconv heuristic files
 │   ├── cfmm_base.py           # Base CFMM heuristic (supports DIS2D/DIS3D reconstruction)
-│   ├── trident_15T.py         # Trident 15T scanner-specific heuristic
-│   └── Menon_CogMSv2.py       # CogMS study-specific heuristic
+│   ├── trident_15T.py         # Trident 15T scanner-specific heuristic (with DWI bvec/bval extraction)
+│   ├── Menon_CogMSv2.py       # CogMS study-specific heuristic
+│   ├── custom_dwi_bruker.py   # Custom DWI bvec/bval extraction from Bruker DICOM
+│   └── README_custom_dwi_bruker.md  # Documentation for custom_dwi_bruker
 ├── resources/                  # Resource files
 │   ├── dcm2niix_config.json   # dcm2niix configuration
 │   └── dataset_description.json  # BIDS dataset metadata template
-├── heuristics/                 # Heudiconv heuristics
-│   ├── cfmm_base.py           # Base heuristic for CFMM data
-│   ├── trident_15T.py         # Example: Trident 15T scanner heuristic
-│   └── Menon_CogMSv2.py       # Example: CogMS study heuristic
 ├── config/                     # Configuration files
 │   ├── config.yml             # Configuration template (customize this)
 │   ├── config_trident15T.yml  # Example: Trident 15T scanner configuration
