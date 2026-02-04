@@ -18,6 +18,9 @@
 # except NotADirectoryError:
 #     os.chdir(os.path.dirname(os.getcwd()))
 
+# Import custom DWI Bruker heuristic for bvec/bval extraction
+from custom_dwi_bruker import process_dwi_bvec_bval
+
 
 # ======================================================================================================================
 def create_key(template, outtype=("nii.gz",), annotation_classes=None):
@@ -210,3 +213,41 @@ def infotodict(seqinfo):
             info[dwi].append(s.series_id)
 
     return info
+
+
+# ======================================================================================================================
+# AttachToSession - called by heudiconv after conversion
+# ======================================================================================================================
+
+
+def AttachToSession():  # noqa: N802
+    """
+    Attach custom post-processing to the heudiconv session.
+
+    This function is called by heudiconv after DICOM conversion to perform
+    custom post-processing. Here we use it to extract and generate bvec/bval
+    files for DWI data using the custom_dwi_bruker module.
+
+    Returns
+    -------
+    callable
+        Function that processes the session for DWI bvec/bval extraction
+    """
+
+    def process_session(session, seqinfo, **kwargs):
+        """
+        Process session to add bvec/bval files for DWI acquisitions.
+
+        Parameters
+        ----------
+        session : str or Path
+            Path to the BIDS session directory
+        seqinfo : list
+            List of seqinfo objects from heudiconv
+        **kwargs : dict
+            Additional keyword arguments (ignored)
+        """
+        # Call the custom DWI processing function to generate bvec/bval
+        process_dwi_bvec_bval(session, seqinfo)
+
+    return process_session
