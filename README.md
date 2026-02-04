@@ -177,7 +177,7 @@ study_filter_specs:
 ```
 This creates session labels like `ses-baseline`, `ses-6mo`, `ses-12mo` based on the time between scans.
 
-**Note:** These remapping options are mutually exclusive in practice. The global remapping is applied first, so if both are enabled, the date-based remapping would operate on the globally remapped sessions (which would all be the same).
+**Note:** These remapping options are mutually exclusive. If both are enabled, the workflow will raise an error asking you to choose one.
 
 ### Download Configuration
 - `cfmm2tar_download_options`: Options passed to cfmm2tar (e.g., `--skip-derived`)

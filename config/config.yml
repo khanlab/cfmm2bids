@@ -173,8 +173,8 @@ study_filter_specs:
   # - Including scanner/study information in the session name (e.g., 'ses-15T')
   # - Simplifying session naming when temporal ordering is not important
   #
-  # NOTE: This remapping is applied BEFORE remap_sessions_by_date.
-  # You typically would use only one of these remapping options, not both.
+  # NOTE: Cannot be used together with remap_sessions_by_date. These options
+  # are mutually exclusive - enable only one or the other, not both.
   remap_session_globally:
     # Enable/disable global session remapping (REQUIRED if section is present)
     enable: false

@@ -162,14 +162,8 @@ class TestPostFilterWithGlobalRemap:
         # Sessions should be unchanged
         assert list(result["session"]) == ["A", "B"]
 
-    def test_global_remap_applied_before_date_remap(self):
-        """Test that global remapping is applied before date-based remapping.
-
-        Note: In practice, these two options should not be used together since
-        global remapping sets all sessions to the same value, making date-based
-        remapping meaningless. This test verifies the order of operations but
-        expects an error when trying to parse the globally remapped value as a date.
-        """
+    def test_global_remap_and_date_remap_both_enabled_raises_error(self):
+        """Test that enabling both remapping options raises a clear error."""
         df = pd.DataFrame(
             {
                 "subject": ["sub-01", "sub-01"],
@@ -177,8 +171,6 @@ class TestPostFilterWithGlobalRemap:
             }
         )
 
-        # Enable both global and date-based remapping
-        # Global remap should be applied first
         post_filter_specs = {
             "remap_session_globally": {
                 "enable": True,
@@ -190,9 +182,15 @@ class TestPostFilterWithGlobalRemap:
             },
         }
 
-        # This should raise an error because '15T' cannot be parsed as a date
-        with pytest.raises((ValueError, TypeError)):
+        # This should raise a ValueError with a clear error message
+        with pytest.raises(ValueError) as exc_info:
             post_filter(df, post_filter_specs)
+
+        # Verify the error message is clear
+        error_msg = str(exc_info.value)
+        assert "mutually exclusive" in error_msg
+        assert "remap_session_globally" in error_msg
+        assert "remap_sessions_by_date" in error_msg
 
     def test_exclude_post_remap_still_works(self):
         """Test that exclude_post_remap still works with global remapping."""

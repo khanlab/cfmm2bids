@@ -334,9 +334,25 @@ def post_filter(df, post_filter_specs):
     for q in post_filter_specs.get("exclude") or []:
         df = df.query(f"not ({q})")
 
-    # Apply global session remapping if configured
+    # Check for conflicting session remapping configurations
     global_remap_config = post_filter_specs.get("remap_session_globally")
-    if global_remap_config and global_remap_config.get("enable", False):
+    remap_config = post_filter_specs.get("remap_sessions_by_date")
+
+    global_remap_enabled = global_remap_config and global_remap_config.get(
+        "enable", False
+    )
+    date_remap_enabled = remap_config and remap_config.get("enable", False)
+
+    if global_remap_enabled and date_remap_enabled:
+        raise ValueError(
+            "Cannot enable both 'remap_session_globally' and 'remap_sessions_by_date' "
+            "at the same time. These options are mutually exclusive. "
+            "Use 'remap_session_globally' to set all sessions to a single value, "
+            "or use 'remap_sessions_by_date' for time-based session labels."
+        )
+
+    # Apply global session remapping if configured
+    if global_remap_enabled:
         df = remap_session_globally(
             df,
             session_col=global_remap_config.get("session_col", "session"),
@@ -344,8 +360,7 @@ def post_filter(df, post_filter_specs):
         )
 
     # Apply session remapping by date if configured
-    remap_config = post_filter_specs.get("remap_sessions_by_date")
-    if remap_config and remap_config.get("enable", False):
+    if date_remap_enabled:
         df = remap_sessions_by_date(
             df,
             subject_col=remap_config.get("subject_col", "subject"),
