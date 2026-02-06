@@ -43,18 +43,18 @@ search_specs:
   - dicom_query:
       # Study description pattern (supports wildcards with *)
       # Example: "MyStudy^*" matches studies starting with "MyStudy^"
-      study_description: Khan^*
+      study_description:  Khan^DiffModeling_94T 
       
       # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
       # Examples:
       #   20230101-           (all studies from Jan 1, 2023 onwards)
       #   20230101-20231231   (studies in 2023)
       #   20230515            (studies on May 15, 2023 only)
-      study_date: 20251028
+      study_date: 20250101-
       
       # Patient name pattern (OPTIONAL)
       # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
-      # patient_name: ""
+      patient_name: '*CAD*'
       
       # Other query parameters (OPTIONAL):
       # patient_id: ""
@@ -81,7 +81,7 @@ search_specs:
         # Examples:
         #   '_([^_]+)$'                    extracts last part after underscore
         #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
-        pattern: '.*_([a-zA-Z0-9]+)'
+        pattern: '.*_(CAD[0-9]{2})'
         
         # Remove non-alphanumeric characters (OPTIONAL, default: false)
         # Ensures subject IDs are BIDS-compliant (alphanumeric only)
@@ -101,7 +101,7 @@ search_specs:
         # DICOM field to extract from
         # Common options: StudyDate, PatientID, StudyDescription
         source: StudyDate
-        
+
         # Regex pattern to extract session ID (OPTIONAL)
         # pattern: ''
         
@@ -113,8 +113,11 @@ search_specs:
         # fillna: '01'
         
         # Map extracted values (OPTIONAL)
-        # map:
-        #   01: 'preop'
+        map:
+          '20251028': 15TzonaR
+          '20250805': 15TzonaR
+          '20251110': 94Tsubcort
+          '20250604': 15TzonaL
         #   02: 'postop'
   
   # Additional search specifications (OPTIONAL)
@@ -244,7 +247,7 @@ cfmm2tar_download_options: '--skip-derived'
 #  to a console reboot or some other adverse event.)
 # If these should be separate subjects/sessions, use the above remapping to 
 #  deal with the conflict.
-merge_duplicate_studies: false
+merge_duplicate_studies: true
 
 
 # ============================================================================
@@ -258,7 +261,7 @@ merge_duplicate_studies: false
 # Examples:
 #   heuristics/trident_15T.py
 #   heuristics/Menon_CogMSv2.py
-heuristic: heuristics/cfmm_base.py
+heuristic: heuristics/histo2mri.py
 
 # Path to dcm2niix configuration file (REQUIRED)
 # Contains dcm2niix settings for DICOM to NIfTI conversion
