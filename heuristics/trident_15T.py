@@ -1,22 +1,5 @@
-# Heudiconv cannot extract correct information from the dcm, it switches dim4 and dim3
-# that's why you have to put dim3 > 30, which is reasonable for functional data (we can go even to 40, just to be sure)
-# the 30 here is the number of slices => does not work
-# I found out for 4D images, the image_type has to be ('ORIGINAL', 'PRIMARY', 'NON_PARALLEL', 'NONE')
-# and the 3d volumes => ('ORIGINAL', 'PRIMARY', 'VOLUME', 'NONE')
-
-
-# give the DICOM directory and it will navigate to where the files are
-# use --files flag with the folder you get from unzipping
-# do not use -d flag
-# try:
-#     # keep going down the tree as long as you are facing dirs
-#     while os.path.isdir(os.getcwd()):
-#         curr_dir = glob.glob("*")
-#         os.chdir(curr_dir[-1])
-#
-#     # once you face dicoms, go up one level (that's where all data is)
-# except NotADirectoryError:
-#     os.chdir(os.path.dirname(os.getcwd()))
+# Import bruker custom_callable for extracting bval/bvec from dicoms
+from custom.bruker import custom_callable  # noqa: F401
 
 
 # ======================================================================================================================
@@ -206,7 +189,10 @@ def infotodict(seqinfo):
                 info[func_resting_R].append(s.series_id)
 
         # ==================================================diffusion========================================================
-        elif "DWI" in s.series_description:
+        elif (
+            "dwi" in s.series_description.lower()
+            or "diff3d" in s.series_description.lower()
+        ):
             info[dwi].append(s.series_id)
 
     return info
