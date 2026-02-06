@@ -68,10 +68,8 @@ def query_filesystem(search_specs, base_path=None):
         if search_path.exists():
             # Search for tar/tar.gz files and folders
             for item in search_path.iterdir():
-                if (
-                    item.is_file()
-                    and item.name.endswith((".tar", ".tar.gz"))
-                    or item.is_dir()
+                if (item.is_file() and item.name.endswith((".tar", ".tar.gz"))) or (
+                    item.is_dir()
                 ):
                     match = re.search(pattern, item.name)
                     if match:

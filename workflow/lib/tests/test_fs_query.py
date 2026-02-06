@@ -39,8 +39,8 @@ class TestFilesystemQuery:
 
         # Verify results
         assert len(result_df) == 3
-        assert all(result_df["subject"] == ["001", "002", "003"])
-        assert all(result_df["session"] == ["20230101", "20230102", "20230103"])
+        assert list(result_df["subject"]) == ["001", "002", "003"]
+        assert list(result_df["session"]) == ["20230101", "20230102", "20230103"]
         assert all(result_df["path"].str.endswith(".tar.gz"))
 
     def test_query_folders(self, tmp_path):
@@ -74,8 +74,8 @@ class TestFilesystemQuery:
 
         # Verify results
         assert len(result_df) == 3
-        assert all(result_df["subject"] == ["ABC", "DEF", "GHI"])
-        assert all(result_df["session"] == ["20230101", "20230102", "20230103"])
+        assert list(result_df["subject"]) == ["ABC", "DEF", "GHI"]
+        assert list(result_df["session"]) == ["20230101", "20230102", "20230103"]
 
     def test_query_with_pattern_extraction(self, tmp_path):
         """Test regex pattern extraction in metadata mappings."""
@@ -111,8 +111,8 @@ class TestFilesystemQuery:
 
         # Verify results
         assert len(result_df) == 2
-        assert all(result_df["subject"] == ["001", "002"])
-        assert all(result_df["session"] == ["baseline", "followup"])
+        assert list(result_df["subject"]) == ["001", "002"]
+        assert list(result_df["session"]) == ["baseline", "followup"]
 
     def test_query_with_constant_values(self, tmp_path):
         """Test constant value functionality."""
@@ -145,7 +145,7 @@ class TestFilesystemQuery:
         # Verify results
         assert len(result_df) == 2
         assert all(result_df["subject"] == "pilot")
-        assert all(result_df["session"] == ["20230101", "20230102"])
+        assert list(result_df["session"]) == ["20230101", "20230102"]
 
     def test_query_with_mapping(self, tmp_path):
         """Test value mapping functionality."""
@@ -181,8 +181,8 @@ class TestFilesystemQuery:
 
         # Verify results
         assert len(result_df) == 2
-        assert all(result_df["subject"] == ["001", "002"])
-        assert all(result_df["session"] == ["20230101", "20230102"])
+        assert list(result_df["subject"]) == ["001", "002"]
+        assert list(result_df["session"]) == ["20230101", "20230102"]
 
     def test_empty_query(self, tmp_path):
         """Test query with no matches."""
@@ -244,7 +244,7 @@ class TestFilesystemQuery:
 
         # Verify combined results
         assert len(result_df) == 2
-        assert all(result_df["subject"] == ["001", "002"])
+        assert list(result_df["subject"]) == ["001", "002"]
 
     def test_missing_source_field_raises_error(self, tmp_path):
         """Test that missing source field raises appropriate error."""

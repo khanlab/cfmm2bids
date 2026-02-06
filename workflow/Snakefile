@@ -248,6 +248,7 @@ rule download_data:
 
 
 # Keep cfmm2tar as an alias for backwards compatibility
+# Note: This rule now handles both DICOM and filesystem sources via download_data
 use rule download_data as cfmm2tar
 
 
