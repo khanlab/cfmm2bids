@@ -395,4 +395,3 @@ class TestCombinedQuery:
         # Call query_combined and expect error
         with pytest.raises(LookupError, match="No matching studies found"):
             query_combined(search_specs)
-

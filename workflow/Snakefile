@@ -181,10 +181,10 @@ def get_fs_path_from_wildcards(wildcards):
         within=df,
     )
     if isinstance(matches, tuple):
-        return matches.path if hasattr(matches, 'path') else None
+        return matches.path if hasattr(matches, "path") else None
     else:
         # Return first match's path if it exists
-        return matches[0].path if hasattr(matches[0], 'path') else None
+        return matches[0].path if hasattr(matches[0], "path") else None
 
 
 rule download_data:
@@ -195,8 +195,16 @@ rule download_data:
     For filesystem sources: extracts tar files or copies folder contents
     """
     params:
-        uid=lambda wildcards: get_uid_from_wildcards(wildcards) if get_source_from_wildcards(wildcards) == "dicom" else "",
-        fs_path=lambda wildcards: get_fs_path_from_wildcards(wildcards) if get_source_from_wildcards(wildcards) == "filesystem" else "",
+        uid=lambda wildcards: (
+            get_uid_from_wildcards(wildcards)
+            if get_source_from_wildcards(wildcards) == "dicom"
+            else ""
+        ),
+        fs_path=lambda wildcards: (
+            get_fs_path_from_wildcards(wildcards)
+            if get_source_from_wildcards(wildcards) == "filesystem"
+            else ""
+        ),
         source=get_source_from_wildcards,
         cfmm2tar_download_options=config.get("cfmm2tar_download_options", ""),
         creds_file=config.get("credentials_file", ""),

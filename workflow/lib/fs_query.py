@@ -47,10 +47,7 @@ def query_filesystem(search_specs, base_path=None):
     ... }]
     >>> df = query_filesystem(search_specs)
     """
-    if base_path is None:
-        base_path = Path.cwd()
-    else:
-        base_path = Path(base_path)
+    base_path = Path.cwd() if base_path is None else Path(base_path)
 
     all_dfs = []
 
@@ -71,13 +68,13 @@ def query_filesystem(search_specs, base_path=None):
         if search_path.exists():
             # Search for tar/tar.gz files and folders
             for item in search_path.iterdir():
-                if item.is_file() and (
-                    item.suffix in [".tar", ".gz"] or item.name.endswith(".tar.gz")
+                if (
+                    item.is_file()
+                    and (
+                        item.suffix in [".tar", ".gz"] or item.name.endswith(".tar.gz")
+                    )
+                    or item.is_dir()
                 ):
-                    match = re.search(pattern, item.name)
-                    if match:
-                        matches.append((item, match.groupdict()))
-                elif item.is_dir():
                     match = re.search(pattern, item.name)
                     if match:
                         matches.append((item, match.groupdict()))
@@ -100,9 +97,7 @@ def query_filesystem(search_specs, base_path=None):
             # Check if a constant value is specified
             if "constant" in mapping:
                 # Use constant value for all rows
-                series = pd.Series(
-                    mapping["constant"], index=df_.index, dtype=object
-                )
+                series = pd.Series(mapping["constant"], index=df_.index, dtype=object)
             else:
                 # Extract from source column
                 source_col = mapping["source"]

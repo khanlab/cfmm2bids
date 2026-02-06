@@ -1,9 +1,5 @@
 """Tests for filesystem query module."""
 
-import tempfile
-from pathlib import Path
-
-import pandas as pd
 import pytest
 
 from workflow.lib.fs_query import query_filesystem
@@ -20,7 +16,7 @@ class TestFilesystemQuery:
             "sub-002_20230102.tar.gz",
             "sub-003_20230103.tar.gz",
         ]
-        
+
         for filename in test_files:
             (tmp_path / filename).touch()
 
@@ -55,7 +51,7 @@ class TestFilesystemQuery:
             "Patient_DEF_20230102",
             "Patient_GHI_20230103",
         ]
-        
+
         for foldername in test_folders:
             (tmp_path / foldername).mkdir()
 
@@ -88,7 +84,7 @@ class TestFilesystemQuery:
             "study_sub-001_ses-baseline.tar",
             "study_sub-002_ses-followup.tar",
         ]
-        
+
         for filename in test_files:
             (tmp_path / filename).touch()
 
@@ -125,7 +121,7 @@ class TestFilesystemQuery:
             "scan_20230101.tar.gz",
             "scan_20230102.tar.gz",
         ]
-        
+
         for filename in test_files:
             (tmp_path / filename).touch()
 
@@ -158,7 +154,7 @@ class TestFilesystemQuery:
             "sub-A_20230101.tar.gz",
             "sub-B_20230102.tar.gz",
         ]
-        
+
         for filename in test_files:
             (tmp_path / filename).touch()
 
