@@ -247,10 +247,6 @@ rule download_data:
             raise ValueError(f"Unknown source type: {params.source}")
 
 
-# Keep cfmm2tar as an alias for backwards compatibility
-# Note: This rule now handles both DICOM and filesystem sources via download_data
-use rule download_data as cfmm2tar
-
 
 rule heudiconv:
     """
