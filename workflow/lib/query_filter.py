@@ -121,9 +121,7 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
             # Check if a constant value is specified
             if "constant" in mapping:
                 # Use constant value for all rows
-                series = pd.Series(
-                    mapping["constant"], index=df_.index, dtype=object
-                )
+                series = pd.Series(mapping["constant"], index=df_.index, dtype=object)
             else:
                 # Extract from source column
                 source_col = mapping["source"]

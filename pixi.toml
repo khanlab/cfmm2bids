@@ -16,6 +16,7 @@ highdicom = ">=0.26.1,<0.27"
 nibabel = ">=5.3.2,<6"
 matplotlib = ">=3.10.7,<4"
 snakemake-executor-plugin-slurm = ">=1.4.0,<2"
+numpy = "<2.4.0"
 
 
 [pypi-dependencies]
