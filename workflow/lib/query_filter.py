@@ -10,6 +10,9 @@ try:
 except ImportError:
     query_metadata = None
 
+# Import fs_query functions
+from lib.fs_query import query_filesystem
+
 
 def compute_query_hash(search_specs, query_kwargs=None):
     """
@@ -159,6 +162,68 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
     # Combine all query results into a single DataFrame
     if len(all_dfs) == 0:
         raise LookupError("No matching studies found!")
+
+    df = pd.concat(all_dfs, ignore_index=True)
+
+    return df
+
+
+def query_combined(search_specs, base_path=None, **query_metadata_kwargs):
+    """
+    Execute combined queries from both DICOM server and filesystem.
+
+    This function processes search specifications that may contain either
+    'dicom_query' or 'fs_query' entries, executes the appropriate query
+    function for each, and combines the results into a single DataFrame.
+
+    Parameters
+    ----------
+    search_specs : list of dict
+        List of search specifications. Each spec should contain either:
+        - 'dicom_query': dict with DICOM server query parameters
+        - 'fs_query': dict with filesystem query parameters
+    base_path : str or Path, optional
+        Base path for resolving relative paths in fs_query. Default is None.
+    **query_metadata_kwargs
+        Additional keyword arguments passed to query_metadata for DICOM queries.
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined DataFrame with results from all queries.
+        Includes a 'source' column indicating 'dicom' or 'filesystem'.
+
+    Raises
+    ------
+    LookupError
+        If no matching studies are found from any query.
+    """
+    all_dfs = []
+
+    # Separate DICOM and filesystem query specs
+    dicom_specs = [s for s in search_specs if "dicom_query" in s]
+    fs_specs = [s for s in search_specs if "fs_query" in s]
+
+    # Execute DICOM queries if any
+    if dicom_specs:
+        try:
+            dicom_df = query_dicoms(dicom_specs, **query_metadata_kwargs)
+            dicom_df["source"] = "dicom"
+            all_dfs.append(dicom_df)
+        except LookupError:
+            # No DICOM matches found, continue
+            pass
+
+    # Execute filesystem queries if any
+    if fs_specs:
+        fs_df = query_filesystem(fs_specs, base_path=base_path)
+        if not fs_df.empty:
+            fs_df["source"] = "filesystem"
+            all_dfs.append(fs_df)
+
+    # Combine all results
+    if len(all_dfs) == 0:
+        raise LookupError("No matching studies found from any query source!")
 
     df = pd.concat(all_dfs, ignore_index=True)
 

@@ -245,3 +245,154 @@ class TestMetadataMappingsConstant:
         assert len(result_df) == 2
         assert list(result_df["subject"]) == ["001", "002"]
         assert list(result_df["session"]) == ["20230101", "20230102"]
+
+
+class TestCombinedQuery:
+    """Test combined DICOM and filesystem query functionality."""
+
+    def test_combined_query_dicom_only(self, monkeypatch):
+        """Test combined query with only DICOM specs."""
+        # Create mock data
+        mock_df = pd.DataFrame(
+            {
+                "PatientID": ["Patient1", "Patient2"],
+                "StudyDate": ["20230101", "20230102"],
+                "StudyInstanceUID": ["1.2.3.4", "1.2.3.5"],
+            }
+        )
+
+        # Mock query_metadata to return our test dataframe
+        def mock_query_metadata(return_type=None, **kwargs):
+            return mock_df.copy()
+
+        # Patch the query_metadata function
+        import workflow.lib.query_filter as qf_module
+
+        monkeypatch.setattr(qf_module, "query_metadata", mock_query_metadata)
+
+        # Import after patching
+        from workflow.lib.query_filter import query_combined
+
+        # Define DICOM-only search specs
+        search_specs = [
+            {
+                "dicom_query": {
+                    "study_description": "Test^*",
+                    "study_date": "20230101-",
+                },
+                "metadata_mappings": {
+                    "subject": {"source": "PatientID", "sanitize": True},
+                    "session": {"source": "StudyDate", "sanitize": True},
+                },
+            }
+        ]
+
+        # Call query_combined
+        result_df = query_combined(search_specs)
+
+        # Verify results
+        assert len(result_df) == 2
+        assert all(result_df["source"] == "dicom")
+        assert all(result_df["subject"] == ["Patient1", "Patient2"])
+
+    def test_combined_query_filesystem_only(self, tmp_path):
+        """Test combined query with only filesystem specs."""
+        # Create test files
+        (tmp_path / "sub-001_20230101.tar.gz").touch()
+        (tmp_path / "sub-002_20230102.tar.gz").touch()
+
+        # Import function
+        from workflow.lib.query_filter import query_combined
+
+        # Define filesystem-only search specs
+        search_specs = [
+            {
+                "fs_query": {
+                    "path": str(tmp_path),
+                    "pattern": r"sub-(?P<PatientID>\d+)_(?P<StudyDate>\d{8})\.tar\.gz",
+                },
+                "metadata_mappings": {
+                    "subject": {"source": "PatientID", "sanitize": True},
+                    "session": {"source": "StudyDate", "sanitize": True},
+                },
+            }
+        ]
+
+        # Call query_combined
+        result_df = query_combined(search_specs)
+
+        # Verify results
+        assert len(result_df) == 2
+        assert all(result_df["source"] == "filesystem")
+        assert all(result_df["subject"] == ["001", "002"])
+
+    def test_combined_query_both_sources(self, monkeypatch, tmp_path):
+        """Test combined query with both DICOM and filesystem specs."""
+        # Create mock DICOM data
+        mock_df = pd.DataFrame(
+            {
+                "PatientID": ["PatientA"],
+                "StudyDate": ["20230101"],
+                "StudyInstanceUID": ["1.2.3.4"],
+            }
+        )
+
+        # Mock query_metadata
+        def mock_query_metadata(return_type=None, **kwargs):
+            return mock_df.copy()
+
+        import workflow.lib.query_filter as qf_module
+
+        monkeypatch.setattr(qf_module, "query_metadata", mock_query_metadata)
+
+        # Create test filesystem files
+        (tmp_path / "sub-B_20230102.tar.gz").touch()
+
+        # Import function
+        from workflow.lib.query_filter import query_combined
+
+        # Define combined search specs
+        search_specs = [
+            {
+                "dicom_query": {
+                    "study_description": "Test^*",
+                    "study_date": "20230101-",
+                },
+                "metadata_mappings": {
+                    "subject": {"source": "PatientID", "sanitize": True},
+                    "session": {"source": "StudyDate", "sanitize": True},
+                },
+            },
+            {
+                "fs_query": {
+                    "path": str(tmp_path),
+                    "pattern": r"sub-(?P<PatientID>[A-Z])_(?P<StudyDate>\d{8})\.tar\.gz",
+                },
+                "metadata_mappings": {
+                    "subject": {"source": "PatientID", "sanitize": True},
+                    "session": {"source": "StudyDate", "sanitize": True},
+                },
+            },
+        ]
+
+        # Call query_combined
+        result_df = query_combined(search_specs)
+
+        # Verify combined results
+        assert len(result_df) == 2
+        # One DICOM source, one filesystem source
+        assert (result_df["source"] == "dicom").sum() == 1
+        assert (result_df["source"] == "filesystem").sum() == 1
+
+    def test_combined_query_no_matches_raises_error(self):
+        """Test that combined query with no matches raises LookupError."""
+        # Import function
+        from workflow.lib.query_filter import query_combined
+
+        # Define search specs that won't match anything
+        search_specs = []
+
+        # Call query_combined and expect error
+        with pytest.raises(LookupError, match="No matching studies found"):
+            query_combined(search_specs)
+

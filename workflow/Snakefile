@@ -5,6 +5,7 @@ import pandas as pd
 from lib.query_filter import (
     compute_query_hash,
     post_filter,
+    query_combined,
     query_dicoms,
     should_skip_query,
     validate_column,
@@ -54,10 +55,11 @@ if skip_query:
         skip_query = False
 
 if not skip_query:
-    # Perform new query
-    df = query_dicoms(
+    # Perform new query (combined DICOM and filesystem)
+    df = query_combined(
         config["search_specs"],
-        credentials_file=config["credentials_file"],
+        base_path=Path.cwd(),
+        credentials_file=config.get("credentials_file"),
         **config.get("query_kwargs", dict()),
     )
 
@@ -159,11 +161,45 @@ def get_uid_from_wildcards(wildcards):
             )
 
 
-rule cfmm2tar:
+def get_source_from_wildcards(wildcards):
+    """Get the data source (dicom or filesystem) for a subject/session."""
+    matches = lookup(
+        query=f"subject == '{wildcards.subject}' and session == '{wildcards.session}'",
+        within=df,
+    )
+    if isinstance(matches, tuple):
+        return matches.source
+    else:
+        # Get first match's source (all should be the same)
+        return matches[0].source
+
+
+def get_fs_path_from_wildcards(wildcards):
+    """Get the filesystem path for a subject/session from filesystem query."""
+    matches = lookup(
+        query=f"subject == '{wildcards.subject}' and session == '{wildcards.session}'",
+        within=df,
+    )
+    if isinstance(matches, tuple):
+        return matches.path if hasattr(matches, 'path') else None
+    else:
+        # Return first match's path if it exists
+        return matches[0].path if hasattr(matches[0], 'path') else None
+
+
+rule download_data:
+    """
+    Download or copy DICOM data based on source type.
+    
+    For DICOM server sources: uses cfmm2tar to download from CFMM
+    For filesystem sources: extracts tar files or copies folder contents
+    """
     params:
-        uid=get_uid_from_wildcards,
-        cfmm2tar_download_options=config["cfmm2tar_download_options"],
-        creds_file=config["credentials_file"],
+        uid=lambda wildcards: get_uid_from_wildcards(wildcards) if get_source_from_wildcards(wildcards) == "dicom" else "",
+        fs_path=lambda wildcards: get_fs_path_from_wildcards(wildcards) if get_source_from_wildcards(wildcards) == "filesystem" else "",
+        source=get_source_from_wildcards,
+        cfmm2tar_download_options=config.get("cfmm2tar_download_options", ""),
+        creds_file=config.get("credentials_file", ""),
     output:
         dicoms_dir=directory(stage_download / "dicoms/sub-{subject}/ses-{session}"),
     log:
@@ -172,8 +208,39 @@ rule cfmm2tar:
     resources:
         mem_mb=4000,
         runtime=15,
-    shell:
-        "cfmm2tar -c {params.creds_file} {params.cfmm2tar_download_options} {params.uid} {output.dicoms_dir} &> {log}"
+    run:
+        if params.source == "dicom":
+            # Download from DICOM server using cfmm2tar
+            shell(
+                "cfmm2tar -c {params.creds_file} {params.cfmm2tar_download_options} {params.uid} {output.dicoms_dir} &> {log}"
+            )
+        elif params.source == "filesystem":
+            # Copy or extract from filesystem
+            shell(
+                """
+                mkdir -p {output.dicoms_dir} &> {log}
+                
+                # Check if source is a tar file
+                if [[ "{params.fs_path}" == *.tar.gz ]] || [[ "{params.fs_path}" == *.tar ]]; then
+                    # Extract tar file to output directory
+                    echo "Extracting tar file: {params.fs_path}" &>> {log}
+                    tar -xf {params.fs_path} -C {output.dicoms_dir} &>> {log}
+                elif [[ -d "{params.fs_path}" ]]; then
+                    # Copy folder contents to output directory
+                    echo "Copying folder contents: {params.fs_path}" &>> {log}
+                    cp -r {params.fs_path}/* {output.dicoms_dir}/ &>> {log}
+                else
+                    echo "Error: Unknown file type for {params.fs_path}" &>> {log}
+                    exit 1
+                fi
+                """
+            )
+        else:
+            raise ValueError(f"Unknown source type: {params.source}")
+
+
+# Keep cfmm2tar as an alias for backwards compatibility
+use rule download_data as cfmm2tar
 
 
 rule heudiconv:
@@ -186,7 +253,7 @@ rule heudiconv:
       separately with heudiconv, then merges outputs with series ID offsetting
     """
     input:
-        dicoms_dir=rules.cfmm2tar.output.dicoms_dir,
+        dicoms_dir=stage_download / "dicoms/sub-{subject}/ses-{session}",
         heuristic=config["heuristic"],
         base_heuristics=config.get("base_heuristics", []),
         dcmconfig_json=config["dcmconfig_json"],
