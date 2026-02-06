@@ -12,8 +12,10 @@ search_specs:
         source: PatientID
         pattern: '_([^_]+)$'
         sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
       session:
         source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
 
   - dicom_query:
       study_description: Menon^*
@@ -24,8 +26,10 @@ search_specs:
         source: PatientID
         pattern: '_([^_]+)$'
         sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
       session:
         source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
  
 query_kwargs:
   additional_tags:

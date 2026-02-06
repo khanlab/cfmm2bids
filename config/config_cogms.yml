@@ -11,6 +11,7 @@ search_specs:
         source: PatientID
         pattern: '[sS][fF][cC][-_]?([0-9]+)'
         sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
         premap:
           17.08.03-14:36:43-DST-1.3.12.2.1107.5.2.34.18932: SFC-103
           17.09.01-10:37:58-DST-1.3.12.2.1107.5.2.34.18932: SFC-105
@@ -32,6 +33,7 @@ search_specs:
 #        source: PatientID
 #        pattern: '[sS][fF][cC][-_]?[0-9]+[-_](.+)$'
         sanitize: true
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
         # fillna: '01'
         # map:
         #  v2: '02'

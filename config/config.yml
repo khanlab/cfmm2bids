@@ -44,23 +44,23 @@ search_specs:
       # Study description pattern (supports wildcards with *)
       # Example: "MyStudy^*" matches studies starting with "MyStudy^"
       study_description: Khan^*
-      
+
       # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
       # Examples:
       #   20230101-           (all studies from Jan 1, 2023 onwards)
       #   20230101-20231231   (studies in 2023)
       #   20230515            (studies on May 15, 2023 only)
       study_date: 20230101-
-      
+
       # Patient name pattern (OPTIONAL)
       # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
       # patient_name: ""
-      
+
       # Other query parameters (OPTIONAL):
       # patient_id: ""
       # study_instance_uid: ""
       # accession_number: ""
-      
+
     # Metadata mappings: Extract subject and session IDs from DICOM fields
     metadata_mappings:
       # Subject ID extraction (REQUIRED)
@@ -69,59 +69,73 @@ search_specs:
         # Common options: PatientID, PatientName, StudyDescription
         source: PatientID
 
+        # Constant value for all subjects (OPTIONAL)
+        # If specified, all subjects will use this constant value instead of extracting from DICOM
+        # Useful for single-subject studies or when all data belongs to the same subject
+        # Example: constant: 'pilot'
+        # Note: When using 'constant', the 'source' field can be omitted or will be ignored
+        # constant: 'pilot'
+
         # Pre-map extracted values to new values (OPTIONAL)
         # Example: map  to session numbers
         # map:
         #   194.4193.34.2.1.441.1: Sub-001
         #   Subj04: Subj003 #e.g. if incorrect ID used
-      
-        
+
+
         # Regex pattern to extract subject ID (OPTIONAL)
         # Use capture group () to extract the desired part
         # Examples:
         #   '_([^_]+)$'                    extracts last part after underscore
         #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
         pattern: '[sS][uU][bB][-_]([a-zA-Z0-9]+)'
-        
+
         # Remove non-alphanumeric characters (OPTIONAL, default: false)
         # Ensures subject IDs are BIDS-compliant (alphanumeric only)
         sanitize: true
-        
+
         # Fill missing values with a default (OPTIONAL)
         # fillna: '01'
-        
+
         # Map extracted values to new values (OPTIONAL)
         # Example: map visit names to session numbers
         # map:
         #   01: 001
         #   04: 003 #e.g. if incorrect ID used
-      
+
       # Session ID extraction (REQUIRED)
       session:
         # DICOM field to extract from
         # Common options: StudyDate, PatientID, StudyDescription
         source: StudyDate
-        
+
+        # Constant value for all sessions (OPTIONAL)
+        # If specified, all sessions will use this constant value instead of extracting from DICOM
+        # Useful when all data should have the same session label (e.g., all scans from same scanner)
+        # Example: constant: '15T'
+        # Note: When using 'constant', the 'source' field can be omitted or will be ignored
+        # constant: '15T'
+
         # Regex pattern to extract session ID (OPTIONAL)
         # pattern: ''
-        
+
         # Remove non-alphanumeric characters (OPTIONAL, default: false)
         # sanitize: true
-        
+
         # Fill missing values with a default (OPTIONAL)
         # Useful if some subjects don't have session info
         # fillna: '01'
-        
+
         # Map extracted values (OPTIONAL)
         # map:
         #   01: 'preop'
         #   02: 'postop'
-  
+
   # Additional search specifications (OPTIONAL)
   # You can define multiple search specs to query from different studies,
-  #  or the same study with different specs. Everything will be added to 
+  #  or the same study with different specs. Everything will be added to
   #  the same BIDS dataset.
-  
+
   # - dicom_query:
   #     study_description: AnotherStudy^*
   #     study_date: 20230101-
@@ -140,7 +154,7 @@ search_specs:
 query_kwargs:
   additional_tags:
     "00100030": PatientBirthDate
- 
+
 
 # ============================================================================
 # 2. FILTER STAGE - Post-filter queried studies
@@ -155,7 +169,7 @@ study_filter_specs:
   #   - "subject.str.startswith('sub')"   # Include only subjects starting with 'sub'
   #   - "session == '01'"                 # Include only first session
   include:
-  
+
   # Exclude rules (OPTIONAL)
   # Studies matching ANY exclude rule will be filtered out
   # Examples:
@@ -165,7 +179,7 @@ study_filter_specs:
   #   - "subject.str.contains('test')"        # Exclude subjects with 'test' in ID
   exclude:
     # - StudyInstanceUID == '2.16.756.5.5.200.8323328.24337.1724894202.13553'
-  
+
   # Remap sessions based on study date ordering (OPTIONAL)
   # This feature automatically remaps session IDs to time-based labels
   # based on the temporal ordering of study dates for each subject.
@@ -178,25 +192,25 @@ study_filter_specs:
   remap_sessions_by_date:
     # Enable/disable session remapping (REQUIRED if section is present)
     enable: false
-    
+
     # Column names (OPTIONAL, defaults shown)
     # subject_col: 'subject'
     # session_col: 'session'
-    
+
     # Format of session dates if stored as strings (OPTIONAL, default: '%Y%m%d')
     # session_format: '%Y%m%d'
-    
+
     # Time units for intervals (OPTIONAL, default: 'months')
     # Options: 'days', 'months', 'years'
     # units: 'months'
-    
+
     # Rounding step for time intervals (OPTIONAL, default: 6)
     # For example, with units='months' and round_step=6:
     #   - 0-3 months → 0m
     #   - 3-9 months → 6m
     #   - 9-15 months → 12m
     # round_step: 6
-    
+
     # Zero-pad session labels (OPTIONAL, default: false)
     # If true, pads session labels with leading zeros to the width of the largest number.
     # For example, if the maximum value is 100 months:
@@ -204,17 +218,17 @@ study_filter_specs:
     #   - With zero_pad=true: '000m', '006m', '012m', '100m'
     # This is useful for ensuring proper alphanumeric sorting of session labels.
     # zero_pad: false
-    
+
     # Reference date column (OPTIONAL)
     # If not specified, uses first session per subject as reference (baseline mode)
     # If specified, uses that column as reference date (e.g., for age at scan)
     # Example: 'PatientBirthDate' to calculate age at time of scan
     # reference_col: 'PatientBirthDate'
-    
+
     # Format of reference date column if stored as strings (OPTIONAL, default: '%Y%m%d')
     # Only used when reference_col is specified
     # reference_format: '%Y%m%d'
-    
+
     # Mapping from numeric time intervals to session labels (OPTIONAL)
     # If not specified, generates labels like '0m', '6m', '12m' automatically
     # Custom mapping example (e.g., for time since baseline):
@@ -238,11 +252,11 @@ cfmm2tar_download_options: '--skip-derived'
 
 # Merge duplicate studies (OPTIONAL, default: false)
 # If true, multiple studies matching the same subject/session will be merged
-#  into the same subject/session when converted. 
+#  into the same subject/session when converted.
 # If false, workflow will fail if duplicates are found
-# Use true if subjects have multiple scan sessions on the same day (e.g. due 
+# Use true if subjects have multiple scan sessions on the same day (e.g. due
 #  to a console reboot or some other adverse event.)
-# If these should be separate subjects/sessions, use the above remapping to 
+# If these should be separate subjects/sessions, use the above remapping to
 #  deal with the conflict.
 merge_duplicate_studies: false
 
@@ -253,7 +267,7 @@ merge_duplicate_studies: false
 
 # Path to heudiconv heuristic file (REQUIRED)
 # The heuristic defines how DICOM series are mapped to BIDS filenames.
-# You should ensure this heuristic is applicable for all the studies you 
+# You should ensure this heuristic is applicable for all the studies you
 # are converting.
 # Examples:
 #   heuristics/trident_15T.py
@@ -276,9 +290,9 @@ heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
 # ============================================================================
 # 5. FIX STAGE - Post-conversion fixes
 # ============================================================================
-# Apply fixes to the BIDS dataset after conversion, and are meant to 
-# capture any changes you would need to make for bids-compliance, e.g. 
-# missing JSON entries, or removing extra files that are not required. 
+# Apply fixes to the BIDS dataset after conversion, and are meant to
+# capture any changes you would need to make for bids-compliance, e.g.
+# missing JSON entries, or removing extra files that are not required.
 # These fixes are defined in the workflow/lib/bids_fixes.py module.
 # Fixes are applied sequentially in the order listed.
 
@@ -287,7 +301,7 @@ post_convert_fixes:
   # - name: remove_unwanted_fieldmaps
   #   pattern: "fmap/*dir-AP*"
   #   action: remove
-  
+
   # Example 2: Update JSON metadata
   # - name: add_phase_encoding
   #   pattern: "func/*bold.json"
@@ -295,19 +309,19 @@ post_convert_fixes:
   #   updates:
   #     PhaseEncodingDirection: "j-"
   #     TotalReadoutTime: 0.05
-  
+
   # Example 3: Add phase units to phase images
   # - name: phase_units
   #   pattern: "*/*_part-phase_*.json"
   #   action: update_json
   #   updates:
   #     Units: rad
-  
+
   # Example 4: Fix NIfTI orientation to RAS+
   # - name: reorient_nifti
   #   pattern: "anat/*T1w.nii.gz"
   #   action: fix_orientation
-  
+
   # Example 5: Remove duplicate NIfTI files (keeps first alphabetically)
   # - name: remove_duplicates
   #   pattern: "."
@@ -315,14 +329,14 @@ post_convert_fixes:
 
 # Lines to add to the .bidsignore file
 # bidsignore:
-#  - 
+#  -
 
 # ============================================================================
 # INTERMEDIATE OUTPUT FOLDERS (OPTIONAL)
 # ============================================================================
 # Customize the directories for intermediate workflow stages.
 # You may need to do this e.g. if your dicoms or converted files need to go
-# on a disk with larger capacity. 
+# on a disk with larger capacity.
 # Default paths are shown below and are relative to the working directory.
 
 stages:

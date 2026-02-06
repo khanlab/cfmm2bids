@@ -135,6 +135,24 @@ search_specs:
         source: StudyDate       # Use StudyDate as session ID
 ```
 
+#### Using Constant Values
+
+You can use the `constant` option to set all subjects or sessions to a fixed value instead of extracting from DICOM fields. This is useful when:
+- All data should use the same session label (e.g., all scans from the same scanner like "15T")
+- Running a single-subject study where all data belongs to the same subject (e.g., "pilot")
+
+```yaml
+metadata_mappings:
+  subject:
+    source: PatientID
+    pattern: '_([^_]+)$'
+    sanitize: true
+  session:
+    constant: '15T'  # All sessions will be labeled as 'ses-15T'
+```
+
+When `constant` is specified, it takes precedence over any `source` field, which can be omitted or will be ignored. The constant value is applied to all matching studies.
+
 ### Filter Configuration (`study_filter_specs`)
 Post-filter studies with include/exclude rules:
 ```yaml

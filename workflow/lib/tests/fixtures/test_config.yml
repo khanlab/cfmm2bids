@@ -12,8 +12,10 @@ search_specs:
         source: PatientID
         pattern: 'TestPatient([0-9]+)'
         sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
       session:
         source: StudyDate
+        # constant: '01'  # Use constant value for all sessions (OPTIONAL)
 
 query_kwargs: {}
 
