@@ -1,0 +1,42 @@
+# Test configuration for filesystem query feature
+credentials_file: ~/.uwo_credentials.bd
+final_bids_dir: "bids_test"
+
+# Query with filesystem source
+search_specs:
+  - fs_query:
+      path: /test/data
+      pattern: 'sub-(?P<PatientID>\d+)_(?P<StudyDate>\d{8})\.tar\.gz'
+    metadata_mappings:
+      subject:
+        source: PatientID
+        sanitize: true
+      session:
+        source: StudyDate
+
+query_kwargs: {}
+
+# Filter
+study_filter_specs:
+  include:
+  exclude:
+
+# Download
+cfmm2tar_download_options: '--skip-derived'
+merge_duplicate_studies: false
+
+# Convert
+heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+heuristic: heuristics/cfmm_base.py
+dcmconfig_json: resources/dcm2niix_config.json
+
+# Fix
+post_convert_fixes: []
+
+# Stages
+stages:
+  query: "results/0_query"
+  filter: "results/1_filter"
+  download: "results/2_download"
+  convert: "results/3_convert"
+  fix: "results/4_fix"

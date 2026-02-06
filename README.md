@@ -120,6 +120,15 @@ For working examples, see:
 - `config/config_cogms.yml` - Configuration for CogMS study
 
 ### Query Configuration (`search_specs`)
+
+The workflow supports two types of data queries:
+1. **DICOM Server Query** (`dicom_query`): Query DICOM studies directly from CFMM server
+2. **Filesystem Query** (`fs_query`): Query DICOM data already downloaded to the filesystem
+
+You can use either type or combine both in the same configuration.
+
+#### DICOM Server Query
+
 Define one or more DICOM queries with metadata mappings:
 ```yaml
 search_specs:
@@ -134,6 +143,59 @@ search_specs:
       session:
         source: StudyDate       # Use StudyDate as session ID
 ```
+
+#### Filesystem Query
+
+Query DICOM data that has already been downloaded to the filesystem as tar/tar.gz files or folders:
+```yaml
+search_specs:
+  - fs_query:
+      path: /path/to/downloaded/dicoms  # Path to search (absolute or relative)
+      pattern: 'sub-(?P<PatientID>\d+)_(?P<StudyDate>\d{8})\.tar\.gz'  # Regex pattern with named groups
+    metadata_mappings:
+      subject:
+        source: PatientID      # Use named group from pattern
+        sanitize: true
+      session:
+        source: StudyDate      # Use named group from pattern
+```
+
+**Key Points for Filesystem Query:**
+- The `path` can be absolute or relative to the working directory
+- The `pattern` must use named groups (e.g., `(?P<PatientID>...)`) to extract fields
+- Named groups become available as source fields in `metadata_mappings`
+- Works with tar files (`.tar`, `.tar.gz`) and folders
+- During download stage, tar files are extracted and folder contents are copied
+
+#### Combining Query Types
+
+You can combine DICOM and filesystem queries in the same configuration:
+```yaml
+search_specs:
+  # Query from DICOM server
+  - dicom_query:
+      study_description: Study1^*
+      study_date: 20230101-
+    metadata_mappings:
+      subject:
+        source: PatientID
+        sanitize: true
+      session:
+        source: StudyDate
+  
+  # Query from filesystem
+  - fs_query:
+      path: /data/archived_studies
+      pattern: 'study_(?P<SubjectID>\d+)_(?P<SessionID>\w+)\.tar'
+    metadata_mappings:
+      subject:
+        source: SubjectID
+        sanitize: true
+      session:
+        source: SessionID
+```
+
+The workflow will combine results from all queries and add a `source` column to track data origin (`dicom` or `filesystem`).
 
 #### Using Constant Values
 

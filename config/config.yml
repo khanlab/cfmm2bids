@@ -147,6 +147,27 @@ search_specs:
   #     session:
   #       source: StudyDate
 
+  # Filesystem query specifications (OPTIONAL)
+  # Query DICOM data that has already been downloaded to the filesystem.
+  # Data can be in tar/tar.gz files or folders. Use regex patterns to extract
+  # metadata fields from filenames/folder names.
+
+  # - fs_query:
+  #     # Path to search for files/folders (can be absolute or relative)
+  #     path: /path/to/downloaded/dicoms
+  #     
+  #     # Regex pattern with named groups to extract fields
+  #     # Named groups become available as source fields in metadata_mappings
+  #     # Example: Extract PatientID and StudyDate from filename
+  #     pattern: 'sub-(?P<PatientID>\d+)_(?P<StudyDate>\d{8})\.tar\.gz'
+  #   
+  #   metadata_mappings:
+  #     subject:
+  #       source: PatientID  # Use named group from pattern
+  #       sanitize: true
+  #     session:
+  #       source: StudyDate  # Use named group from pattern
+
 
 
 # additional options to pass to cfmm query_metadata, e.g. to include additional

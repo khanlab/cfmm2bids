@@ -11,7 +11,7 @@ import pandas as pd
 
 
 def query_filesystem(search_specs, base_path=None):
-    """
+    r"""
     Query filesystem for DICOM data based on filename/folder patterns.
 
     This function scans the filesystem for tar/tar.gz files or folders
