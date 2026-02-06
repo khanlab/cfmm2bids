@@ -70,9 +70,7 @@ def query_filesystem(search_specs, base_path=None):
             for item in search_path.iterdir():
                 if (
                     item.is_file()
-                    and (
-                        item.suffix in [".tar", ".gz"] or item.name.endswith(".tar.gz")
-                    )
+                    and item.name.endswith((".tar", ".tar.gz"))
                     or item.is_dir()
                 ):
                     match = re.search(pattern, item.name)

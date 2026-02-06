@@ -292,8 +292,8 @@ class TestCombinedQuery:
 
         # Verify results
         assert len(result_df) == 2
-        assert all(result_df["source"] == "dicom")
-        assert all(result_df["subject"] == ["Patient1", "Patient2"])
+        assert list(result_df["source"]) == ["dicom", "dicom"]
+        assert list(result_df["subject"]) == ["Patient1", "Patient2"]
 
     def test_combined_query_filesystem_only(self, tmp_path):
         """Test combined query with only filesystem specs."""
@@ -323,8 +323,8 @@ class TestCombinedQuery:
 
         # Verify results
         assert len(result_df) == 2
-        assert all(result_df["source"] == "filesystem")
-        assert all(result_df["subject"] == ["001", "002"])
+        assert list(result_df["source"]) == ["filesystem", "filesystem"]
+        assert list(result_df["subject"]) == ["001", "002"]
 
     def test_combined_query_both_sources(self, monkeypatch, tmp_path):
         """Test combined query with both DICOM and filesystem specs."""
