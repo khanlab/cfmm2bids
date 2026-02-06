@@ -247,7 +247,6 @@ rule download_data:
             raise ValueError(f"Unknown source type: {params.source}")
 
 
-
 rule heudiconv:
     """
     Run heudiconv to convert DICOMs to BIDS format.
