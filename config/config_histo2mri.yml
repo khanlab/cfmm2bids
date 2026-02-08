@@ -437,7 +437,10 @@ dcmconfig_json: resources/dcm2niix_config.json
 #   --no-sanitize-jsons        Don't sanitize dates from JSON sidecar files
 # Multiple options can be space-separated
 # Can be str or dict (indexed by session, or session substrings)
-heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+heudiconv_options: 
+  94T: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+  15T: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+  7T: '--minmeta --no-sanitize-jsons'
 
     
 
