@@ -126,6 +126,151 @@ search_specs:
           '20250224': 15TzonaRpost
           '20240815': 15TzonaLant
 
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description:  Khan^PostMortem
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20231115-
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+#      patient_name: '*'
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject:
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
+
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+        premap:
+          2023_11_16_CAD_01: 2023_11_16_CAD01
+          2023_11_15_CAD_03: 2023_11_15_CAD03
+          2024_12_17_CAD04_WB: ''
+
+        
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '(CAD[0-9]{2})'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # fillna: '01'
+       
+
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        # map:
+        #   01: 001
+        #   04: 003 #e.g. if incorrect ID used
+      
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
+        #source: StudyDate
+
+        constant: '7Tinsitu'
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description:  Khan^PostMortem
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20231115-
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+#      patient_name: '*'
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject:
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
+
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+        
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '(CAD[0-9]{2})_WB'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # fillna: '01'
+       
+
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        # map:
+        #   01: 001
+        #   04: 003 #e.g. if incorrect ID used
+      
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
+        #source: StudyDate
+
+        constant: '7Tbrain'
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
   
   # Additional search specifications (OPTIONAL)
   # You can define multiple search specs to query from different studies,
@@ -174,6 +319,7 @@ study_filter_specs:
   #   - "subject != subject"                  # Exclude if subject is NaN
   #   - "subject.str.contains('test')"        # Exclude subjects with 'test' in ID
   exclude:
+    - "subject != subject"                  # Exclude if subject is NaN
     # - StudyInstanceUID == '2.16.756.5.5.200.8323328.24337.1724894202.13553'
   
   # Remap sessions based on study date ordering (OPTIONAL)
@@ -264,11 +410,21 @@ merge_duplicate_studies: true
 # Path to heudiconv heuristic file (REQUIRED)
 # The heuristic defines how DICOM series are mapped to BIDS filenames.
 # You should ensure this heuristic is applicable for all the studies you 
-# are converting.
-# Examples:
-#   heuristics/trident_15T.py
-#   heuristics/Menon_CogMSv2.py
-heuristic: heuristics/histo2mri.py
+# are converting. 
+#
+# Example:
+#   heuristic: heuristics/trident_15T.py
+#
+# If you need different heuristics for different session types, 
+# this can be defined as a dict, where the keys are session names, or 
+# substrings of session names (the first match will be taken). 
+
+
+heuristic:
+  94T: heuristics/histo2mri.py
+  15T: heuristics/histo2mri.py
+  7T: heuristics/cfmm_base.py
+
 
 # Path to dcm2niix configuration file (REQUIRED)
 # Contains dcm2niix settings for DICOM to NIfTI conversion
@@ -280,7 +436,10 @@ dcmconfig_json: resources/dcm2niix_config.json
 #   --use-enhanced-dicom       Support enhanced DICOM files (use for Bruker)
 #   --no-sanitize-jsons        Don't sanitize dates from JSON sidecar files
 # Multiple options can be space-separated
+# Can be str or dict (indexed by session, or session substrings)
 heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+
+    
 
 
 # ============================================================================
