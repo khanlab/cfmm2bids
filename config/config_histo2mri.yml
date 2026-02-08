@@ -21,7 +21,7 @@ credentials_file: ~/.uwo_credentials
 # Final output directory for the BIDS dataset (REQUIRED)
 # Absolute or relative paths can be used, will be relative to working folder
 # Default: "bids"
-final_bids_dir: "bids"
+final_bids_dir: "/nfs/khan/datasets/histo2mri/bids_cfmm2bids"
 
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
@@ -50,11 +50,12 @@ search_specs:
       #   20230101-           (all studies from Jan 1, 2023 onwards)
       #   20230101-20231231   (studies in 2023)
       #   20230515            (studies on May 15, 2023 only)
-      study_date: 20250101-
+      study_date: 20240815-
+#      study_date: 20251110
       
       # Patient name pattern (OPTIONAL)
       # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
-      patient_name: '*CAD*'
+#      patient_name: '*'
       
       # Other query parameters (OPTIONAL):
       # patient_id: ""
@@ -67,7 +68,7 @@ search_specs:
       subject:
         # DICOM field to extract from
         # Common options: PatientID, PatientName, StudyDescription
-        source: PatientID
+        source: PatientName
 
         # Pre-map extracted values to new values (OPTIONAL)
         # Example: map  to session numbers
@@ -81,7 +82,7 @@ search_specs:
         # Examples:
         #   '_([^_]+)$'                    extracts last part after underscore
         #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
-        pattern: '.*_(CAD[0-9]{2})'
+        pattern: '^([A-Z]+[0-9]{2})'
         
         # Remove non-alphanumeric characters (OPTIONAL, default: false)
         # Ensures subject IDs are BIDS-compliant (alphanumeric only)
@@ -114,11 +115,17 @@ search_specs:
         
         # Map extracted values (OPTIONAL)
         map:
+          '20251110': 94Tsubcort
           '20251028': 15TzonaR
           '20250805': 15TzonaR
-          '20251110': 94Tsubcort
+          '20250605': 15TzonaR
           '20250604': 15TzonaL
-        #   02: 'postop'
+          '20250529': 15TzonaLpost
+          '20250522': 15TzonaL
+          '20250506': 15TzonaR
+          '20250224': 15TzonaRpost
+          '20240815': 15TzonaLant
+
   
   # Additional search specifications (OPTIONAL)
   # You can define multiple search specs to query from different studies,
@@ -286,18 +293,17 @@ heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
 # Fixes are applied sequentially in the order listed.
 
 post_convert_fixes:
-  # Example 1: Remove unwanted files
-  # - name: remove_unwanted_fieldmaps
-  #   pattern: "fmap/*dir-AP*"
-  #   action: remove
-  
-  # Example 2: Update JSON metadata
-  # - name: add_phase_encoding
-  #   pattern: "func/*bold.json"
-  #   action: update_json
-  #   updates:
-  #     PhaseEncodingDirection: "j-"
-  #     TotalReadoutTime: 0.05
+  - name: add_phase_encoding_94T_AP
+    pattern: "dwi/*ses-94Tsubcort*_dir-AP*dwi.json"
+    action: update_json
+    updates:
+      PhaseEncodingDirection: "i-"
+ 
+  - name: add_phase_encoding_94T_PA
+    pattern: "dwi/*ses-94Tsubcort*_dir-PA*dwi.json"
+    action: update_json
+    updates:
+      PhaseEncodingDirection: "i"
   
   # Example 3: Add phase units to phase images
   # - name: phase_units
@@ -329,11 +335,11 @@ post_convert_fixes:
 # Default paths are shown below and are relative to the working directory.
 
 stages:
-  query: "results/0_query"        # Query results (studies.tsv)
-  filter: "results/1_filter"      # Filtered studies (studies_filtered.tsv)
-  download: "results/2_download"  # Downloaded DICOMs
-  convert: "results/3_convert"    # Initial BIDS conversion + QC reports
-  fix: "results/4_fix"            # Fixed BIDS dataset
+  query: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/0_query"        # Query results (studies.tsv)
+  filter: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/1_filter"      # Filtered studies (studies_filtered.tsv)
+  download: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/2_download"  # Downloaded DICOMs
+  convert: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/3_convert"    # Initial BIDS conversion + QC reports
+  fix: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/4_fix"            # Fixed BIDS dataset
 
 
 # ============================================================================
