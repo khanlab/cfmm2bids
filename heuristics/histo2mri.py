@@ -2,7 +2,6 @@
 from custom.bruker import custom_callable  # noqa: F401
 
 
-
 # ======================================================================================================================
 def create_key(template, outtype=("nii.gz",), annotation_classes=None):
     if template is None or not template:
@@ -52,15 +51,13 @@ def infotodict(seqinfo):
     )
 
     # ==================================================================================================================
-    #megre
+    # megre
     megre_orig = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_rec-orig_run-{item:01d}_MEGRE"
     )
     megre_den = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_rec-denoised_run-{item:01d}_MEGRE"
     )
-
-
 
     # ==================================================================================================================
     # diffusion
@@ -70,7 +67,6 @@ def infotodict(seqinfo):
     dwi_rpe = create_key(
         "sub-{subject}/{session}/dwi/sub-{subject}_{session}_dir-PA_run-{item:01d}_dwi"
     )
-
 
     # ==================================================================================================================
 
@@ -86,7 +82,6 @@ def infotodict(seqinfo):
         dwi: [],
         dwi_rpe: [],
     }
-
 
     # T2w RARE is also similar, but we have the original, then the denoised
     # First: collect candidate T2w RARE
@@ -113,7 +108,7 @@ def infotodict(seqinfo):
     for s in seqinfo:
         desc = s.series_description.lower()
         if "mge" in desc:
-            print('adding MGE scan to MEGRE candidates')
+            print("adding MGE scan to MEGRE candidates")
             print(s)
             megre_candidates.append(s)
 
@@ -127,7 +122,6 @@ def infotodict(seqinfo):
             info[megre_orig].append(s.series_id)
         elif pos == 1:
             info[megre_den].append(s.series_id)
-
 
     # ---------------------------------------------------------------------------------------
 
@@ -144,16 +138,17 @@ def infotodict(seqinfo):
         elif "MT" in s.series_description:
             info[mtsat].append(s.series_id)
 
-
         elif (
             "dwi" in s.series_description.lower()
             or "diff3d" in s.series_description.lower()
             or "dtiepi" in s.series_description.lower()
         ):
-            if 'rpe' in s.series_description.lower() or 'rv' in s.series_description.lower():
+            if (
+                "rpe" in s.series_description.lower()
+                or "rv" in s.series_description.lower()
+            ):
                 info[dwi_rpe].append(s.series_id)
             else:
                 info[dwi].append(s.series_id)
-
 
     return info
