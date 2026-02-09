@@ -238,7 +238,7 @@ rule heudiconv:
         "logs/heudiconv/sub-{subject}_ses-{session}.log",
     shadow:
         "minimal"
-    threads: 16
+    threads: 4
     resources:
         mem_mb=16000,
         runtime=60,

@@ -20,7 +20,7 @@ numpy = "<2.4.0"
 
 
 [pypi-dependencies]
-cfmm2tar = { git = "https://github.com/khanlab/cfmm2tar", rev = "master" }
+cfmm2tar = { git = "https://github.com/khanlab/cfmm2tar", rev = "v2.2.0" }
 heudiconv = { git = "https://github.com/khanlab/heudiconv", rev = "master"}
 bids-validator-deno = ">=2.2.0,<3"
 pre-commit = ">=4.0.0,<5"

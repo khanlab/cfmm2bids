@@ -63,10 +63,10 @@ def infotodict(seqinfo):
 
     # Dist. corrected versions:
     DIS3D_inv1_mp2rage = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_inv-1_run-{item:01d}_MP2RAGE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_run-{item:01d}_inv-1_MP2RAGE"
     )
     DIS3D_inv2_mp2rage = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_inv-2_run-{item:01d}_MP2RAGE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_run-{item:01d}_inv-2_MP2RAGE"
     )
     DIS3D_t1map = create_key(
         "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-MP2RAGE_rec-DIS3D_run-{item:01d}_T1map"
@@ -75,14 +75,14 @@ def infotodict(seqinfo):
         "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-MP2RAGE_rec-DIS3D_run-{item:01d}_T1w"
     )
     DIS3D_uni_mp2rage = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-UNI_rec-DIS3D_run-{item:01d}_MP2RAGE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-MP2RAGE_rec-DIS3D_run-{item:01d}_UNIT1"
     )
 
     DIS2D_inv1_mp2rage = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_inv-1_run-{item:01d}_MP2RAGE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_run-{item:01d}_inv-1_MP2RAGE"
     )
     DIS2D_inv2_mp2rage = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_inv-2_run-{item:01d}_MP2RAGE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_run-{item:01d}_inv-2_MP2RAGE"
     )
     DIS2D_t1map = create_key(
         "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-MP2RAGE_rec-DIS2D_run-{item:01d}_T1map"
@@ -91,7 +91,7 @@ def infotodict(seqinfo):
         "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-MP2RAGE_rec-DIS2D_run-{item:01d}_T1w"
     )
     DIS2D_uni_mp2rage = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-UNI_rec-DIS2D_run-{item:01d}_MP2RAGE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-MP2RAGE_rec-DIS2D_run-{item:01d}_UNIT1"
     )
 
     inv_1_sa2rage = create_key(
@@ -289,13 +289,13 @@ def infotodict(seqinfo):
 
     # MIPS
     DIS2D_TOF_SAG = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-TOF_rec-DIS2D_sagMIP"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-TOFsagMIP_rec-DIS2D_angio"
     )
     DIS2D_TOF_COR = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-TOF_rec-DIS2D_corMIP"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-TOFcorMIP_rec-DIS2D_angio"
     )
     DIS2D_TOF_TRA = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-TOF_rec-DIS2D_traMIP"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-TOFtraMIP_rec-DIS2D_angio"
     )
 
     #########################
@@ -304,58 +304,53 @@ def infotodict(seqinfo):
 
     # Multi-echo GRE (Susc3D)
     mag_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-mag_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-mag_MEGRE"
     )
     phase_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-phase_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-phase_MEGRE"
     )
-
     DIS2D_mag_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-mag_rec-DIS2D_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_part-mag_MEGRE"
     )
     DIS2D_phase_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-phase_rec-DIS2D_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_part-phase_MEGRE"
     )
     DIS3D_mag_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-mag_rec-DIS3D_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_part-mag_MEGRE"
     )
     DIS3D_phase_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_part-phase_rec-DIS3D_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_part-phase_MEGRE"
     )
-
-    # Derived T2 star - seem to only be calculated with DIS2D
+    # Derived T2 star - these are correct as _T2starw (T2star-weighted) or should go to derivatives
     T2_star = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_T2star"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_T2starw"
     )
     DIS2D_T2_star = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_T2star"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS2D_T2starw"
     )
     DIS3D_T2_star = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_T2star"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_rec-DIS3D_T2starw"
     )
-
     # me-gre with compressed sensing
     mag_echo_CS_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-CS_run-{item:01d}_part-mag_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-CS_run-{item:01d}_part-mag_MEGRE"
     )
     phase_echo_CS_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-CS_run-{item:01d}_part-phase_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-CS_run-{item:01d}_part-phase_MEGRE"
     )
-
     # aspire:
     DIS2D_aspire_mag_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_part-mag_rec-DIS2D_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_rec-DIS2D_part-mag_MEGRE"
     )
     DIS2D_aspire_phase_echo_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_part-phase_rec-DIS2D_echo_GRE"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_rec-DIS2D_part-phase_MEGRE"
     )
     DIS2D_aspire_T2_star_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_rec-DIS2D_T2star"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_rec-DIS2D_T2starw"
     )
     DIS2D_aspire_R2_star_GRE = create_key(
-        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_rec-DIS2D_R2star"
+        "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-ASPIRE_rec-DIS2D_R2starmap"
     )
-
     # MEMP2RAGE   #--- note: the indiv echos for mp2rage from memp2rage are not typically needed
     me_t1map = create_key(
         "{bids_subject_session_dir}/anat/{bids_subject_session_prefix}_acq-MP2RAGE_run-{item:01d}_T1map"
@@ -573,6 +568,7 @@ def infotodict(seqinfo):
     }
 
     for _idx, s in enumerate(seqinfo):
+        print(s.image_type)
         # memp2rage
         if "memp2rage" in s.protocol_name:
             if "UNI-DEN" in (s.series_description).strip():

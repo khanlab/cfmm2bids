@@ -251,7 +251,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/39/e8/806475fe4cdfd8635535d3fa11bd61d19b7cc94b61b9147ebdd2ab4cbbee/acres-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/c0/a73e362dfe68d6b7fb2507d4d513685a07f745bfc86624d2788f27f001cd/bids_validator_deno-2.4.0-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl
-      - pypi: git+https://github.com/khanlab/cfmm2tar?rev=master#5fce0228a22ec69d5d8a1a85a4c38a49443f71f2
+      - pypi: git+https://github.com/khanlab/cfmm2tar?rev=v2.2.0#5fce0228a22ec69d5d8a1a85a4c38a49443f71f2
       - pypi: https://files.pythonhosted.org/packages/12/d5/27742bf24dde737fe05e6fba615d9aa1bf95f4dda258a45cf97eb403366e/ci_info-0.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bb/62/04cf229c7068327e7026fc9654f7749cd9274e821caa2ac13e4fa0faa2fb/dcmstack-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
@@ -529,7 +529,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/39/e8/806475fe4cdfd8635535d3fa11bd61d19b7cc94b61b9147ebdd2ab4cbbee/acres-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6c/c0/a73e362dfe68d6b7fb2507d4d513685a07f745bfc86624d2788f27f001cd/bids_validator_deno-2.4.0-py2.py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl
-      - pypi: git+https://github.com/khanlab/cfmm2tar?rev=master#5fce0228a22ec69d5d8a1a85a4c38a49443f71f2
+      - pypi: git+https://github.com/khanlab/cfmm2tar?rev=v2.2.0#5fce0228a22ec69d5d8a1a85a4c38a49443f71f2
       - pypi: https://files.pythonhosted.org/packages/12/d5/27742bf24dde737fe05e6fba615d9aa1bf95f4dda258a45cf97eb403366e/ci_info-0.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bb/62/04cf229c7068327e7026fc9654f7749cd9274e821caa2ac13e4fa0faa2fb/dcmstack-0.9.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
@@ -790,7 +790,7 @@ packages:
   version: 3.5.0
   sha256: a8dc6b26ad22ff227d2634a65cb388215ce6cc96bbcc5cfde7641ae87e8dacc0
   requires_python: '>=3.10'
-- pypi: git+https://github.com/khanlab/cfmm2tar?rev=master#5fce0228a22ec69d5d8a1a85a4c38a49443f71f2
+- pypi: git+https://github.com/khanlab/cfmm2tar?rev=v2.2.0#5fce0228a22ec69d5d8a1a85a4c38a49443f71f2
   name: cfmm2tar
   version: 2.2.0
   requires_dist:
