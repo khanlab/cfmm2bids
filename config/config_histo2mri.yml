@@ -1,0 +1,551 @@
+# ============================================================================
+# cfmm2bids Configuration Template
+# ============================================================================
+# This is a comprehensive template showing all available configuration options
+# for the cfmm2bids workflow. Copy this file and customize it for your project.
+#
+# For working examples, see:
+#   - config_trident15T.yml (Trident 15T scanner configuration)
+#   - config_cogms.yml (CogMS study configuration)
+# ============================================================================
+
+
+# ============================================================================
+# GENERAL SETTINGS
+# ============================================================================
+
+# Path to CFMM credentials file (REQUIRED)
+# This file contains your login credentials for accessing CFMM DICOM data
+credentials_file: ~/.uwo_credentials
+
+# Final output directory for the BIDS dataset (REQUIRED)
+# Absolute or relative paths can be used, will be relative to working folder
+# Default: "bids"
+final_bids_dir: "/nfs/khan/datasets/histo2mri/bids_cfmm2bids"
+
+# Force re-query of DICOM server (OPTIONAL, default: false)
+# By default, if the query results (studies.tsv) already exist and the
+# query parameters haven't changed, the workflow will skip re-querying.
+# Set to true to always query the DICOM server (e.g., when new scans
+# may have been acquired since the last query).
+# Can also be set via CLI: snakemake --config force_requery=true
+force_requery: false
+
+
+# ============================================================================
+# 1. QUERY STAGE - Search for DICOM studies
+# ============================================================================
+# Define one or more search specifications to query DICOM studies from CFMM.
+# Each specification can have different query parameters and metadata mappings.
+
+search_specs:
+  # First search specification example
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description:  Khan^DiffModeling_94T 
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20240815-
+#      study_date: 20251110
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+#      patient_name: '*'
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject:
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
+
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+        # map:
+        #   194.4193.34.2.1.441.1: Sub-001
+        #   Subj04: Subj003 #e.g. if incorrect ID used
+      
+        
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '^([A-Z]+[0-9]{2})'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # fillna: '01'
+        
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        # map:
+        #   01: 001
+        #   04: 003 #e.g. if incorrect ID used
+      
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
+        source: StudyDate
+
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
+        # Map extracted values (OPTIONAL)
+        map:
+          '20251110': 94Tsubcort
+          '20251028': 15TzonaR
+          '20250805': 15TzonaR
+          '20250605': 15TzonaR
+          '20250604': 15TzonaL
+          '20250529': 15TzonaLpost
+          '20250522': 15TzonaL
+          '20250506': 15TzonaR
+          '20250224': 15TzonaRpost
+          '20240815': 15TzonaLant
+
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description:  Khan^PostMortem
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20231115-
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+#      patient_name: '*'
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject:
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
+
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+        premap:
+          2023_11_16_CAD_01: 2023_11_16_CAD01
+          2023_11_15_CAD_03: 2023_11_15_CAD03
+          2024_12_17_CAD04_WB: ''
+
+        
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '(CAD[0-9]{2})'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # fillna: '01'
+       
+
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        # map:
+        #   01: 001
+        #   04: 003 #e.g. if incorrect ID used
+      
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
+        #source: StudyDate
+
+        constant: '7Tinsitu'
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description:  Khan^PostMortem
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20231115-
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+#      patient_name: '*'
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject:
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
+
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+        
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '(CAD[0-9]{2})_WB'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # fillna: '01'
+       
+
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        # map:
+        #   01: 001
+        #   04: 003 #e.g. if incorrect ID used
+      
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
+        #source: StudyDate
+
+        constant: '7Tbrain'
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
+  
+  # Additional search specifications (OPTIONAL)
+  # You can define multiple search specs to query from different studies,
+  #  or the same study with different specs. Everything will be added to 
+  #  the same BIDS dataset.
+  
+  # - dicom_query:
+  #     study_description: AnotherStudy^*
+  #     study_date: 20230101-
+  #   metadata_mappings:
+  #     subject:
+  #       source: PatientID
+  #       pattern: '_([^_]+)$'
+  #       sanitize: true
+  #     session:
+  #       source: StudyDate
+
+
+
+# additional options to pass to cfmm query_metadata, e.g. to include additional
+# columns in the metadata based on specific dicom tags (like PatientBirthDate below)
+query_kwargs:
+  additional_tags:
+    "00100030": PatientBirthDate
+ 
+
+# ============================================================================
+# 2. FILTER STAGE - Post-filter queried studies
+# ============================================================================
+# Apply include/exclude rules to filter the queried studies before processing.
+# Uses pandas query syntax for flexible filtering.
+
+study_filter_specs:
+  # Include rules (OPTIONAL)
+  # Only studies matching ALL include rules will be processed
+  # Examples:
+  #   - "subject.str.startswith('sub')"   # Include only subjects starting with 'sub'
+  #   - "session == '01'"                 # Include only first session
+  include:
+  
+  # Exclude rules (OPTIONAL)
+  # Studies matching ANY exclude rule will be filtered out
+  # Examples:
+  #   - "StudyInstanceUID == '1.2.3.4.5'"     # Exclude specific study by UID
+  #   - "PatientID == 'TestSubject'"          # Exclude test subjects
+  #   - "subject != subject"                  # Exclude if subject is NaN
+  #   - "subject.str.contains('test')"        # Exclude subjects with 'test' in ID
+  exclude:
+    - "subject != subject"                  # Exclude if subject is NaN
+    # - StudyInstanceUID == '2.16.756.5.5.200.8323328.24337.1724894202.13553'
+  
+  # Remap sessions based on study date ordering (OPTIONAL)
+  # This feature automatically remaps session IDs to time-based labels
+  # based on the temporal ordering of study dates for each subject.
+  # Useful for longitudinal studies where you want consistent session labels
+  # like '0m', '6m', '12m' instead of arbitrary date strings.
+  #
+  # Two modes are supported:
+  # 1. Time since baseline (default): Uses first session per subject as reference
+  # 2. Age at scan: Uses a date column like PatientBirthDate as reference
+  remap_sessions_by_date:
+    # Enable/disable session remapping (REQUIRED if section is present)
+    enable: false
+    
+    # Column names (OPTIONAL, defaults shown)
+    # subject_col: 'subject'
+    # session_col: 'session'
+    
+    # Format of session dates if stored as strings (OPTIONAL, default: '%Y%m%d')
+    # session_format: '%Y%m%d'
+    
+    # Time units for intervals (OPTIONAL, default: 'months')
+    # Options: 'days', 'months', 'years'
+    # units: 'months'
+    
+    # Rounding step for time intervals (OPTIONAL, default: 6)
+    # For example, with units='months' and round_step=6:
+    #   - 0-3 months → 0m
+    #   - 3-9 months → 6m
+    #   - 9-15 months → 12m
+    # round_step: 6
+    
+    # Zero-pad session labels (OPTIONAL, default: false)
+    # If true, pads session labels with leading zeros to the width of the largest number.
+    # For example, if the maximum value is 100 months:
+    #   - With zero_pad=false: '0m', '6m', '12m', '100m'
+    #   - With zero_pad=true: '000m', '006m', '012m', '100m'
+    # This is useful for ensuring proper alphanumeric sorting of session labels.
+    # zero_pad: false
+    
+    # Reference date column (OPTIONAL)
+    # If not specified, uses first session per subject as reference (baseline mode)
+    # If specified, uses that column as reference date (e.g., for age at scan)
+    # Example: 'PatientBirthDate' to calculate age at time of scan
+    # reference_col: 'PatientBirthDate'
+    
+    # Format of reference date column if stored as strings (OPTIONAL, default: '%Y%m%d')
+    # Only used when reference_col is specified
+    # reference_format: '%Y%m%d'
+    
+    # Mapping from numeric time intervals to session labels (OPTIONAL)
+    # If not specified, generates labels like '0m', '6m', '12m' automatically
+    # Custom mapping example (e.g., for time since baseline):
+    # time_to_label:
+    #   0: 'baseline'
+    #   6: '6mo'
+    #   12: '12mo'
+    #   18: '18mo'
+    #   24: '24mo'
+
+
+# ============================================================================
+# 3. DOWNLOAD STAGE - Download DICOM files from CFMM
+# ============================================================================
+
+# Additional options to pass to cfmm2tar (OPTIONAL)
+# Common options:
+#   --skip-derived      Skip derived/processed images
+#   (empty string for no options)
+cfmm2tar_download_options: '--skip-derived'
+
+# Merge duplicate studies (OPTIONAL, default: false)
+# If true, multiple studies matching the same subject/session will be merged
+#  into the same subject/session when converted. 
+# If false, workflow will fail if duplicates are found
+# Use true if subjects have multiple scan sessions on the same day (e.g. due 
+#  to a console reboot or some other adverse event.)
+# If these should be separate subjects/sessions, use the above remapping to 
+#  deal with the conflict.
+merge_duplicate_studies: true
+
+
+# ============================================================================
+# 4. CONVERT STAGE - Convert DICOM to BIDS format
+# ============================================================================
+
+# Path to heudiconv heuristic file (REQUIRED)
+# The heuristic defines how DICOM series are mapped to BIDS filenames.
+# You should ensure this heuristic is applicable for all the studies you 
+# are converting. 
+#
+# Example:
+#   heuristic: heuristics/trident_15T.py
+#
+# If you need different heuristics for different session types, 
+# this can be defined as a dict, where the keys are session names, or 
+# substrings of session names (the first match will be taken). 
+
+
+heuristic:
+  94T: heuristics/histo2mri.py
+  15T: heuristics/histo2mri.py
+  7T: heuristics/cfmm_base.py
+
+
+# Path to dcm2niix configuration file (REQUIRED)
+# Contains dcm2niix settings for DICOM to NIfTI conversion
+dcmconfig_json: resources/dcm2niix_config.json
+
+# Additional options to pass to heudiconv (OPTIONAL)
+# Common options:
+#   --minmeta                  Minimal metadata output (use for Bruker)
+#   --use-enhanced-dicom       Support enhanced DICOM files (use for Bruker)
+#   --no-sanitize-jsons        Don't sanitize dates from JSON sidecar files
+# Multiple options can be space-separated
+# Can be str or dict (indexed by session, or session substrings)
+heudiconv_options: 
+  94T: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+  15T: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+  7T: '--minmeta --no-sanitize-jsons'
+
+    
+
+
+# ============================================================================
+# 5. FIX STAGE - Post-conversion fixes
+# ============================================================================
+# Apply fixes to the BIDS dataset after conversion, and are meant to 
+# capture any changes you would need to make for bids-compliance, e.g. 
+# missing JSON entries, or removing extra files that are not required. 
+# These fixes are defined in the workflow/lib/bids_fixes.py module.
+# Fixes are applied sequentially in the order listed.
+
+post_convert_fixes:
+  - name: add_phase_encoding_94T_AP
+    pattern: "dwi/*ses-94Tsubcort*_dir-AP*dwi.json"
+    action: update_json
+    updates:
+      PhaseEncodingDirection: "i-"
+ 
+  - name: add_phase_encoding_94T_PA
+    pattern: "dwi/*ses-94Tsubcort*_dir-PA*dwi.json"
+    action: update_json
+    updates:
+      PhaseEncodingDirection: "i"
+  
+  # Example 3: Add phase units to phase images
+  # - name: phase_units
+  #   pattern: "*/*_part-phase_*.json"
+  #   action: update_json
+  #   updates:
+  #     Units: rad
+  
+  # Example 4: Fix NIfTI orientation to RAS+
+  # - name: reorient_nifti
+  #   pattern: "anat/*T1w.nii.gz"
+  #   action: fix_orientation
+  
+  # Example 5: Remove duplicate NIfTI files (keeps first alphabetically)
+  # - name: remove_duplicates
+  #   pattern: "."
+  #   action: remove_duplicate_niftis
+
+# Lines to add to the .bidsignore file
+# bidsignore:
+#  - 
+
+# ============================================================================
+# INTERMEDIATE OUTPUT FOLDERS (OPTIONAL)
+# ============================================================================
+# Customize the directories for intermediate workflow stages.
+# You may need to do this e.g. if your dicoms or converted files need to go
+# on a disk with larger capacity. 
+# Default paths are shown below and are relative to the working directory.
+
+stages:
+  query: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/0_query"        # Query results (studies.tsv)
+  filter: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/1_filter"      # Filtered studies (studies_filtered.tsv)
+  download: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/2_download"  # Downloaded DICOMs
+  convert: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/3_convert"    # Initial BIDS conversion + QC reports
+  fix: "/nfs/khan/datasets/histo2mri/cfmm2bids/results/4_fix"            # Fixed BIDS dataset
+
+
+# ============================================================================
+# NOTES AND TIPS
+# ============================================================================
+#
+# 1. TESTING YOUR CONFIG:
+#    - Use dry-run to preview: pixi run snakemake --dry-run
+#    - Test with first subject: pixi run snakemake --config head=1 --cores all
+#    - Process first N subjects: pixi run snakemake --config head=3 --cores all
+#    - View the validator output
+
+# 2. RUNNING THE WORKFLOW:
+#    - Full workflow: pixi run snakemake --cores all
+#    - Specific stage: pixi run snakemake [download|convert|fix] --cores all
+#    - On SLURM cluster: pixi run snakemake --executor slurm --jobs 10 #runs 10 jobs at a time
+#
+# 3. QUERY CACHING:
+#    - By default, queries are cached based on a hash of the query parameters
+#    - If the studies.tsv file exists and query params haven't changed, the
+#      query is skipped (useful when running with remote executors like SLURM)
+#    - Use --config force_requery=true to force a fresh query when new scans
+#      may have been acquired since the last query
+#    - The hash is stored in results/0_query/query_hash.txt
+#
+# 4. SUBJECT/SESSION ID VALIDATION:
+#    - Subject and session IDs must contain only alphanumeric characters
+#    - Use 'sanitize: true' to automatically remove invalid characters
+#    - Invalid characters: spaces, hyphens, underscores, special characters
+#
+# 5. PATTERN MATCHING:
+#    - Patterns for the fix and query stage use glob syntax: * matches any characters
+#    - Patterns are relative to subject/session directory in BIDS dataset
+#    - Examples: "anat/*T1w.nii.gz", "func/*task-rest*", "fmap/*"
+#    - Regular expressions are used for matching subject and session patterns
+#
+# 6. QC REPORTS:
+#    - Generated automatically during convert stage
+#    - Located in: results/3_convert/qc/sub-{subject}/ses-{session}/
+#    - Includes series list and unmapped series summary
+#
+# 7. BIDS VALIDATION:
+#    - Runs automatically after convert and fix stages
+#    - Invalid datasets after the fix stage will result in an error
+#    - Validator output can be found in the logs/ folder
+#
+# ============================================================================

@@ -176,6 +176,30 @@ rule cfmm2tar:
         "cfmm2tar -c {params.creds_file} {params.cfmm2tar_download_options} {params.uid} {output.dicoms_dir} &> {log}"
 
 
+def substring_matching(search_string, config_str_or_dict):
+
+    # the search string is e.g. wildcards.session
+    # to enable partial matches, we check whether a key is a
+    # substring of the search string, and take the first match
+
+    if config_str_or_dict == None:
+        return []
+    elif isinstance(config_str_or_dict, str):
+        return config_str_or_dict
+    elif isinstance(config_str_or_dict, dict):
+        # if dict, then it is indexed by session
+        if search_string in config_str_or_dict.keys():
+            return config_str_or_dict[search_string]
+        else:
+            # find first substring match:
+            for key in config_str_or_dict.keys():
+                if key in search_string:
+                    return config_str_or_dict[key]
+            raise ValueError(
+                f"Session-specific config_str_or_dict for {search_string} not matched in {config_str_or_dict.keys()}"
+            )
+
+
 rule heudiconv:
     """
     Run heudiconv to convert DICOMs to BIDS format.
@@ -187,11 +211,19 @@ rule heudiconv:
     """
     input:
         dicoms_dir=rules.cfmm2tar.output.dicoms_dir,
-        heuristic=config["heuristic"],
-        base_heuristics=config.get("base_heuristics", []),
-        dcmconfig_json=config["dcmconfig_json"],
+        heuristic=lambda wildcards: substring_matching(
+            wildcards.session, config["heuristic"]
+        ),
+        base_heuristics=lambda wildcards: substring_matching(
+            wildcards.session, config.get("base_heuristics", None)
+        ),
+        dcmconfig_json=lambda wildcards: substring_matching(
+            wildcards.session, config["dcmconfig_json"]
+        ),
     params:
-        heudiconv_options=config["heudiconv_options"],
+        heudiconv_options=lambda wildcards: substring_matching(
+            wildcards.session, config["heudiconv_options"]
+        ),
         out_info_dir=lambda wildcards: stage_convert
         / "qc/sub-{subject}/ses-{session}".format(**wildcards),
     output:
