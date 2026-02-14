@@ -36,26 +36,7 @@ search_specs:
         pattern: '_(AS[0-9]+[MF][0-9])$'
         sanitize: true
         # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
-        map:
-          357M5: AS160M5
-          361M1: AS160M1
-          361M2: AS160M2
-          361M3: AS160M3
-          361M4: AS161M4
-          361M5: AS161M5
-          391F1: AS167F1
-          391F5: AS167F5
-          391F6: AS167F6
-          436M4: AS209M4
-          436M5: AS209M5
-          436M6: AS209M6
-          436M7: AS209M7
-          463F1: AS210F1
-          463F3: AS210F3
-          463F4: AS210F4
-          463F5: AS208F5
-          463F6: AS210F6
-
+   
       session:
         source: StudyDate
         # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
@@ -87,7 +68,7 @@ study_filter_specs:
     # Zero-pad session labels (OPTIONAL, default: false)
     # If true, pads session labels with leading zeros for proper alphanumeric sorting
     # Example: '00m', '06m', '12m' instead of '0m', '6m', '12m'
-    # zero_pad: false
+    #zero_pad: true
     
     # Reference date mode (OPTIONAL)
     # Default (commented out): Uses first session per subject as reference (baseline mode)
