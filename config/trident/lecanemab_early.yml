@@ -10,18 +10,51 @@ search_specs:
     metadata_mappings:
       subject:
         source: PatientName
-        pattern: '([0-9]{2}-[0-9][A-Z][0-9])$'
+        pattern: '4_([0-9]+-[0-9][MF][0-9])$'
+        sanitize: false
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+        map:
+          '64-5F2': AS303F2
+          '71-2M1': AS305M1
+          '71-2M2': AS305M2
+          '71-2M3': AS305M3
+          '71-2F4': AS306F4
+          '71-2F5': AS306F5  #was the e2 suffix necessary?
+          '71-2F6': AS306F6 
+          '71-2F7': AS306F7
+
+      session:
+        source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+
+  - dicom_query:
+      study_description:  "Menon^AS-MBN"
+      study_date: 20240712-
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '_(AS[0-9]+[MF][0-9])$'
         sanitize: true
         # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
-        premap:
-          645F2: AS303F2
-          712M1: AS305M1
-          712M2: AS305M2
-          712M3: AS305M3
-          712F4: AS306F4
-          712F5: AS306F5e2
-          712F6: AS306F6 
-          712F7: AS306F7
+        map:
+          357M5: AS160M5
+          361M1: AS160M1
+          361M2: AS160M2
+          361M3: AS160M3
+          361M4: AS161M4
+          361M5: AS161M5
+          391F1: AS167F1
+          391F5: AS167F5
+          391F6: AS167F6
+          436M4: AS209M4
+          436M5: AS209M5
+          436M6: AS209M6
+          436M7: AS209M7
+          463F1: AS210F1
+          463F3: AS210F3
+          463F4: AS210F4
+          463F5: AS208F5
+          463F6: AS210F6
 
       session:
         source: StudyDate
@@ -38,6 +71,7 @@ query_kwargs:
 study_filter_specs:
   include:
   exclude:
+    - "subject != subject"                  # Exclude if subject is NaN
   remap_sessions_by_date:
     # Enable/disable session remapping (REQUIRED if section is present)
     enable: true
@@ -97,11 +131,11 @@ post_convert_fixes:
 
 #intermediate output folders
 stages:
-  query: "results/lecanemab_early_prado/0_query"
-  filter: "results/lecanemab_early_prado/1_filter"
-  download: "results/lecanemab_early_prado/2_download"
-  convert: "results/lecanemab_early_prado/3_convert_vaccine"
-  fix: "results/lecanemab_early_prado/4_fix_vaccine"
+  query: "results/lecanemab_early/0_query"
+  filter: "results/lecanemab_early/1_filter"
+  download: "results/lecanemab_early/2_download"
+  convert: "results/lecanemab_early/3_convert"
+  fix: "results/lecanemab_early/4_fix"
 
  
 # Centralized download cache 
