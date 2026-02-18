@@ -109,7 +109,14 @@ unique_uids = df["StudyInstanceUID"].unique().tolist()
 
 rule all:
     input:
-        final_bids_dir,
+        expand(
+            final_bids_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        final_bids_dir / "dataset_description.json",
+        final_bids_dir / ".bidsignore",
         stage_convert / "qc/aggregate_report.html",
         stage_fix / "qc/aggregate_report.html",
 
@@ -613,19 +620,69 @@ rule validate_final:
 rule assemble_final_bids:
     """
     Assemble the final BIDS dataset by copying from the fixed BIDS directory.
-    This ensures the final BIDS directory is always clean and matches the requested subjects.
+    Now outputs individual session directories and top-level files as separate entities,
+    allowing for incremental updates instead of regenerating the entire directory.
     Uses cp -RL to follow symlinks and copy actual files instead of broken symlinks.
     """
     input:
         validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-        bids_dir=stage_fix / "bids",
+        bids_subj_dir=stage_fix / "bids-staging/sub-{subject}/ses-{session}",
     output:
-        bids_dir=directory(final_bids_dir),
+        bids_subj_dir=directory(final_bids_dir / "sub-{subject}/ses-{session}"),
     threads: 1
     resources:
         mem_mb=4000,
-        runtime=int(len(sessions) * 5),
+        runtime=5,
     log:
-        "logs/assemble_final_bids/assemble.log",
+        "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
     shell:
-        "cp -RL {input.bids_dir} {output.bids_dir} &> {log}"
+        "cp -RL {input.bids_subj_dir} {output.bids_subj_dir} &> {log}"
+
+
+rule copy_final_bids_top_level_files:
+    """
+    Copy top-level BIDS files (dataset_description.json, .bidsignore) to final BIDS directory.
+    These are tracked separately from session directories to allow incremental updates.
+    """
+    input:
+        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        src_file=stage_fix / "bids-staging/{filename}",
+    output:
+        dst_file=final_bids_dir / "{filename}",
+    wildcard_constraints:
+        filename="dataset_description.json|.bidsignore",
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=1,
+    log:
+        "logs/assemble_final_bids/copy_{filename}.log",
+    shell:
+        "cp {input.src_file} {output.dst_file} &> {log}"
+
+
+rule clean:
+    """
+    Clean the final BIDS directory by removing files that are not part of the current dataset.
+    This rule finds extraneous files (mainly sub-*/ses-* directories) that should not be present
+    and removes them, keeping the directory clean when subjects/sessions are removed from the dataset.
+    """
+    input:
+        session_dirs=expand(
+            final_bids_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        dataset_description=final_bids_dir / "dataset_description.json",
+        bidsignore=final_bids_dir / ".bidsignore",
+    output:
+        clean_marker=touch(final_bids_dir / ".clean_marker"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10,
+    log:
+        "logs/clean_final_bids/clean.log",
+    script:
+        "scripts/clean_final_bids.py"
