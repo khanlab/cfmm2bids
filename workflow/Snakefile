@@ -619,9 +619,7 @@ rule assemble_final_bids:
     """
     input:
         validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-        src_session_dir=stage_fix / "bids/sub-{subject}/ses-{session}",
-        src_dataset_description=stage_fix / "bids/dataset_description.json",
-        src_bidsignore=stage_fix / "bids/.bidsignore",
+        src_bids_dir=stage_fix / "bids",
     output:
         session_dir=directory(final_bids_dir / "sub-{subject}/ses-{session}"),
     threads: 1
@@ -630,9 +628,12 @@ rule assemble_final_bids:
         runtime=5,
     log:
         "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
+    params:
+        src_session_dir=lambda wildcards: stage_fix
+        / "bids/sub-{subject}/ses-{session}".format(**wildcards),
     shell:
         "mkdir -p {output.session_dir} &> {log} && "
-        "cp -RL {input.src_session_dir}/* {output.session_dir}/ &>> {log}"
+        "cp -RL {params.src_session_dir}/* {output.session_dir}/ &>> {log}"
 
 
 rule copy_final_bids_top_level_files:
@@ -641,17 +642,21 @@ rule copy_final_bids_top_level_files:
     These are tracked separately from session directories to allow incremental updates.
     """
     input:
-        src_file=stage_fix / "bids/{filename}",
+        src_bids_dir=stage_fix / "bids",
     output:
         dst_file=final_bids_dir / "{filename}",
+    wildcard_constraints:
+        filename="dataset_description.json|.bidsignore",
     threads: 1
     resources:
         mem_mb=4000,
         runtime=1,
     log:
         "logs/assemble_final_bids/copy_{filename}.log",
+    params:
+        src_file=lambda wildcards: stage_fix / "bids/{filename}".format(**wildcards),
     shell:
-        "cp {input.src_file} {output.dst_file} &> {log}"
+        "cp {params.src_file} {output.dst_file} &> {log}"
 
 
 rule clean_final_bids:
