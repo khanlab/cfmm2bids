@@ -109,7 +109,7 @@ unique_uids = df["StudyInstanceUID"].unique().tolist()
 
 rule all:
     input:
-        final_bids_dir,
+        final_bids_dir / ".clean_marker",
         stage_convert / "qc/aggregate_report.html",
         stage_fix / "qc/aggregate_report.html",
 
@@ -613,19 +613,134 @@ rule validate_final:
 rule assemble_final_bids:
     """
     Assemble the final BIDS dataset by copying from the fixed BIDS directory.
-    This ensures the final BIDS directory is always clean and matches the requested subjects.
+    Now outputs individual session directories and top-level files as separate entities,
+    allowing for incremental updates instead of regenerating the entire directory.
     Uses cp -RL to follow symlinks and copy actual files instead of broken symlinks.
     """
     input:
         validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-        bids_dir=stage_fix / "bids",
+        src_session_dir=stage_fix / "bids/sub-{subject}/ses-{session}",
+        src_dataset_description=stage_fix / "bids/dataset_description.json",
+        src_bidsignore=stage_fix / "bids/.bidsignore",
     output:
-        bids_dir=directory(final_bids_dir),
+        session_dir=directory(final_bids_dir / "sub-{subject}/ses-{session}"),
     threads: 1
     resources:
         mem_mb=4000,
-        runtime=int(len(sessions) * 5),
+        runtime=5,
     log:
-        "logs/assemble_final_bids/assemble.log",
+        "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
     shell:
-        "cp -RL {input.bids_dir} {output.bids_dir} &> {log}"
+        "mkdir -p {output.session_dir} &> {log} && "
+        "cp -RL {input.src_session_dir}/* {output.session_dir}/ &>> {log}"
+
+
+rule copy_final_bids_top_level_files:
+    """
+    Copy top-level BIDS files (dataset_description.json, .bidsignore) to final BIDS directory.
+    These are tracked separately from session directories to allow incremental updates.
+    """
+    input:
+        src_file=stage_fix / "bids/{filename}",
+    output:
+        dst_file=final_bids_dir / "{filename}",
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=1,
+    log:
+        "logs/assemble_final_bids/copy_{filename}.log",
+    shell:
+        "cp {input.src_file} {output.dst_file} &> {log}"
+
+
+rule clean_final_bids:
+    """
+    Clean the final BIDS directory by removing files that are not part of the current dataset.
+    This rule finds extraneous files (mainly sub-*/ses-* directories) that should not be present
+    and removes them, keeping the directory clean when subjects/sessions are removed from the dataset.
+    """
+    input:
+        session_dirs=expand(
+            final_bids_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        dataset_description=final_bids_dir / "dataset_description.json",
+        bidsignore=final_bids_dir / ".bidsignore",
+    output:
+        clean_marker=touch(final_bids_dir / ".clean_marker"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10,
+    log:
+        "logs/clean_final_bids/clean.log",
+    run:
+        from pathlib import Path
+        import shutil
+
+        # Get expected subjects from inputs
+        expected_subjects = set()
+        for session_dir in input.session_dirs:
+            # Extract subject from path like "bids/sub-123/ses-456"
+            parts = Path(session_dir).parts
+            for i, part in enumerate(parts):
+                if part.startswith("sub-"):
+                    expected_subjects.add(part)
+                    break
+
+        # Find all subject directories in the final BIDS directory
+        bids_path = Path(final_bids_dir)
+        actual_subjects = set()
+        if bids_path.exists():
+            for item in bids_path.iterdir():
+                if item.is_dir() and item.name.startswith("sub-"):
+                    actual_subjects.add(item.name)
+
+        # Remove extraneous subjects
+        extraneous_subjects = actual_subjects - expected_subjects
+        with open(log[0], "w") as logfile:
+            if extraneous_subjects:
+                logfile.write(f"Removing extraneous subjects: {extraneous_subjects}\n")
+                for subject in extraneous_subjects:
+                    subject_path = bids_path / subject
+                    logfile.write(f"Removing {subject_path}\n")
+                    shutil.rmtree(subject_path)
+            else:
+                logfile.write("No extraneous subjects found.\n")
+
+            # Also check for extraneous session directories within subjects
+            for subject in expected_subjects:
+                subject_path = bids_path / subject
+                if not subject_path.exists():
+                    continue
+
+                # Get expected sessions for this subject
+                expected_sessions = set()
+                for session_dir in input.session_dirs:
+                    session_path = Path(session_dir)
+                    if subject in session_path.parts:
+                        # Extract session from path
+                        for part in session_path.parts:
+                            if part.startswith("ses-"):
+                                expected_sessions.add(part)
+                                break
+
+                # Find actual sessions
+                actual_sessions = set()
+                for item in subject_path.iterdir():
+                    if item.is_dir() and item.name.startswith("ses-"):
+                        actual_sessions.add(item.name)
+
+                # Remove extraneous sessions
+                extraneous_sessions = actual_sessions - expected_sessions
+                if extraneous_sessions:
+                    logfile.write(
+                        f"Removing extraneous sessions in {subject}: {extraneous_sessions}\n"
+                    )
+                    for session in extraneous_sessions:
+                        session_path = subject_path / session
+                        logfile.write(f"Removing {session_path}\n")
+                        shutil.rmtree(session_path)
