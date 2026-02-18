@@ -6,7 +6,7 @@ final_bids_dir: "/nfs/trident3/mri/prado/lecanemab_early/bids"
 search_specs:
   - dicom_query:
       study_description:  "Prado^Leq_AB_agg"
-      study_date: 20250601-
+      study_date: 20250601-20260101
     metadata_mappings:
       subject:
         source: PatientName
@@ -26,6 +26,22 @@ search_specs:
       session:
         source: StudyDate
         # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+
+
+  - dicom_query:
+      study_description:  "Prado^Leq_AB_agg"
+      study_date: 20260101-
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '([a-zA-Z0-9]+)$'
+        sanitize: false
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+        map:
+          'As436M1': AS436M1
+
+      session:
+        source: StudyDate
 
   - dicom_query:
       study_description:  "Menon^AS-MBN"
