@@ -109,6 +109,24 @@ unique_uids = df["StudyInstanceUID"].unique().tolist()
 
 rule all:
     input:
+        expand(
+            final_bids_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        final_bids_dir / "dataset_description.json",
+        final_bids_dir / ".bidsignore",
+        stage_convert / "qc/aggregate_report.html",
+        stage_fix / "qc/aggregate_report.html",
+
+
+rule all_clean:
+    """
+    Target rule that assembles the final BIDS dataset and cleans extraneous files.
+    Run this when you want to remove old subjects/sessions that are no longer in the dataset.
+    """
+    input:
         final_bids_dir / ".clean_marker",
         stage_convert / "qc/aggregate_report.html",
         stage_fix / "qc/aggregate_report.html",
@@ -682,70 +700,5 @@ rule clean_final_bids:
         runtime=10,
     log:
         "logs/clean_final_bids/clean.log",
-    run:
-        from pathlib import Path
-        import shutil
-
-        # Get expected subjects from inputs
-        expected_subjects = set()
-        for session_dir in input.session_dirs:
-            # Extract subject from path like "bids/sub-123/ses-456"
-            parts = Path(session_dir).parts
-            for i, part in enumerate(parts):
-                if part.startswith("sub-"):
-                    expected_subjects.add(part)
-                    break
-
-        # Find all subject directories in the final BIDS directory
-        bids_path = Path(final_bids_dir)
-        actual_subjects = set()
-        if bids_path.exists():
-            for item in bids_path.iterdir():
-                if item.is_dir() and item.name.startswith("sub-"):
-                    actual_subjects.add(item.name)
-
-        # Remove extraneous subjects
-        extraneous_subjects = actual_subjects - expected_subjects
-        with open(log[0], "w") as logfile:
-            if extraneous_subjects:
-                logfile.write(f"Removing extraneous subjects: {extraneous_subjects}\n")
-                for subject in extraneous_subjects:
-                    subject_path = bids_path / subject
-                    logfile.write(f"Removing {subject_path}\n")
-                    shutil.rmtree(subject_path)
-            else:
-                logfile.write("No extraneous subjects found.\n")
-
-            # Also check for extraneous session directories within subjects
-            for subject in expected_subjects:
-                subject_path = bids_path / subject
-                if not subject_path.exists():
-                    continue
-
-                # Get expected sessions for this subject
-                expected_sessions = set()
-                for session_dir in input.session_dirs:
-                    session_path = Path(session_dir)
-                    if subject in session_path.parts:
-                        # Extract session from path
-                        for part in session_path.parts:
-                            if part.startswith("ses-"):
-                                expected_sessions.add(part)
-                                break
-
-                # Find actual sessions
-                actual_sessions = set()
-                for item in subject_path.iterdir():
-                    if item.is_dir() and item.name.startswith("ses-"):
-                        actual_sessions.add(item.name)
-
-                # Remove extraneous sessions
-                extraneous_sessions = actual_sessions - expected_sessions
-                if extraneous_sessions:
-                    logfile.write(
-                        f"Removing extraneous sessions in {subject}: {extraneous_sessions}\n"
-                    )
-                    for session in extraneous_sessions:
-                        session_path = subject_path / session
-                        logfile.write(f"Removing {session_path}\n")
-                        shutil.rmtree(session_path)
+    script:
+        "scripts/clean_final_bids.py"
