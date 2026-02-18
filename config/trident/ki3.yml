@@ -1,0 +1,104 @@
+# general 
+credentials_file: ~/.uwo_credentials.bd
+final_bids_dir: "/nfs/trident3/mri/prado/ki3/bids"
+
+# 1. query
+search_specs:
+  - dicom_query:
+      study_description:  "Prado^AD-BV-LEQ"
+      study_date: 20250405-
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '(AS[a-z0-9A-Z]+)$'
+        sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+
+      session:
+        source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+  
+ 
+ 
+query_kwargs:
+  additional_tags:
+#    "00100030": PatientBirthDate
+ 
+ 
+
+
+# 2. filter
+study_filter_specs:
+  include:
+  exclude:
+  remap_sessions_by_date:
+    # Enable/disable session remapping (REQUIRED if section is present)
+    enable: true
+    # Time units for intervals (OPTIONAL, default: 'months')
+    # Options: 'days', 'months', 'years'
+    units: 'months'
+    
+    # Rounding step for time intervals (OPTIONAL, default: 6)
+    # For example, with units='months' and round_step=1:
+    #   - Sessions will be labeled by rounded month intervals (0m, 1m, 2m, etc.)
+    round_step: 3
+    
+    # Zero-pad session labels (OPTIONAL, default: false)
+    # If true, pads session labels with leading zeros for proper alphanumeric sorting
+    # Example: '00m', '06m', '12m' instead of '0m', '6m', '12m'
+    #zero_pad: true
+    
+    # Reference date mode (OPTIONAL)
+    # Default (commented out): Uses first session per subject as reference (baseline mode)
+    # Alternative: Use PatientBirthDate to calculate age at scan
+    # reference_col: 'PatientBirthDate'
+    # reference_format: '%Y%m%d'
+ 
+    # Mapping from numeric time intervals to session labels (OPTIONAL)
+    # If not specified, generates labels like '0m', '6m', '12m' automatically
+    # Custom mapping example (e.g., for time since baseline):
+    time_to_label:
+      0: '11m' 
+      3: '14m'
+ 
+# 3. download
+cfmm2tar_download_options: '--skip-derived'
+merge_duplicate_studies: False  
+
+
+
+# 4. convert
+heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+heuristic: heuristics/ki3_15T.py
+dcmconfig_json: resources/dcm2niix_config.json
+
+
+
+# 5. fix 
+post_convert_fixes:
+  - name: phase_units
+    pattern: "*/*_part-phase_*.json"
+    action: update_json
+    updates:
+      Units: rad
+
+  - name: reset_orientation
+    pattern: "*/*.nii.gz"
+    action: fix_orientation_quadruped
+
+
+#intermediate output folders
+stages:
+  query: "results/ki3/0_query"
+  filter: "results/ki3/1_filter"
+  download: "results/ki3/2_download"
+  convert: "results/ki3/3_convert"
+  fix: "results/ki3/4_fix"
+
+# Centralized download cache 
+# Downloads are cached by StudyInstanceUID to avoid re-downloading
+# the same data when subject/session mappings differ
+# Default: "results/download_cache"
+download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
+
+
