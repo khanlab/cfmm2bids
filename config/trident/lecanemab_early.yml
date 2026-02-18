@@ -1,0 +1,143 @@
+# general 
+credentials_file: ~/.uwo_credentials.bd
+final_bids_dir: "/nfs/trident3/mri/prado/lecanemab_early/bids"
+
+# 1. query
+search_specs:
+  - dicom_query:
+      study_description:  "Prado^Leq_AB_agg"
+      study_date: 20250601-20260101
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '4_([0-9]+-[0-9][MF][0-9])$'
+        sanitize: false
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+        map:
+          '64-5F2': AS303F2
+          '71-2M1': AS305M1
+          '71-2M2': AS305M2
+          '71-2M3': AS305M3
+          '71-2F4': AS306F4
+          '71-2F5': AS306F5  #was the e2 suffix necessary?
+          '71-2F6': AS306F6 
+          '71-2F7': AS306F7
+
+      session:
+        source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+
+
+  - dicom_query:
+      study_description:  "Prado^Leq_AB_agg"
+      study_date: 20260101-
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '([a-zA-Z0-9]+)$'
+        sanitize: false
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+        map:
+          'As436M1': AS436M1
+
+      session:
+        source: StudyDate
+
+  - dicom_query:
+      study_description:  "Menon^AS-MBN"
+      patient_name: "*_AS16*"
+      study_date: 20240712-
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '_(AS[0-9]+[MF][0-9])$'
+        sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+   
+      session:
+        source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+
+ 
+query_kwargs:
+  additional_tags:
+ #   "00100030": PatientBirthDate
+  
+
+
+# 2. filter
+study_filter_specs:
+  include:
+  exclude:
+    - "subject != subject"                  # Exclude if subject is NaN
+  remap_sessions_by_date:
+    # Enable/disable session remapping (REQUIRED if section is present)
+    enable: true
+    # Time units for intervals (OPTIONAL, default: 'months')
+    # Options: 'days', 'months', 'years'
+    units: 'months'
+    
+    # Rounding step for time intervals (OPTIONAL, default: 6)
+    # For example, with units='months' and round_step=1:
+    #   - Sessions will be labeled by rounded month intervals (0m, 1m, 2m, etc.)
+    round_step: 3
+    
+    # Zero-pad session labels (OPTIONAL, default: false)
+    # If true, pads session labels with leading zeros for proper alphanumeric sorting
+    # Example: '00m', '06m', '12m' instead of '0m', '6m', '12m'
+    #zero_pad: true
+    
+    # Reference date mode (OPTIONAL)
+    # Default (commented out): Uses first session per subject as reference (baseline mode)
+    # Alternative: Use PatientBirthDate to calculate age at scan
+    # reference_col: 'PatientBirthDate'
+    # reference_format: '%Y%m%d'
+ 
+    # Mapping from numeric time intervals to session labels (OPTIONAL)
+    # If not specified, generates labels like '0m', '6m', '12m' automatically
+    # Custom mapping example (e.g., for time since baseline):
+    time_to_label:
+      0: '06m'
+      3: '09m'
+      6: '12m'
+ 
+# 3. download
+cfmm2tar_download_options: '--skip-derived'
+merge_duplicate_studies: False  
+
+
+
+# 4. convert
+heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+heuristic: heuristics/trident_15T.py
+dcmconfig_json: resources/dcm2niix_config.json
+
+
+
+# 5. fix 
+post_convert_fixes:
+  - name: phase_units
+    pattern: "*/*_part-phase_*.json"
+    action: update_json
+    updates:
+      Units: rad
+
+  - name: reset_orientation
+    pattern: "*/*.nii.gz"
+    action: fix_orientation_quadruped
+
+
+#intermediate output folders
+stages:
+  query: "results/lecanemab_early/0_query"
+  filter: "results/lecanemab_early/1_filter"
+  download: "results/lecanemab_early/2_download"
+  convert: "results/lecanemab_early/3_convert"
+  fix: "results/lecanemab_early/4_fix"
+
+ 
+# Centralized download cache 
+# Downloads are cached by StudyInstanceUID to avoid re-downloading
+# the same data when subject/session mappings differ
+# Default: "results/download_cache"
+download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
