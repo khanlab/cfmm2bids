@@ -29,6 +29,7 @@ search_specs:
 
   - dicom_query:
       study_description:  "Menon^AS-MBN"
+      patient_name: "*_AS16*"
       study_date: 20240712-
     metadata_mappings:
       subject:
