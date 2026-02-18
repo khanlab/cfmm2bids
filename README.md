@@ -88,6 +88,8 @@ Outputs:
 ### 6. Final Stage (`bids/`)
 Copies the validated and fixed BIDS dataset to the final output directory.
 
+Note: the workflow will not automatically clean-up subjects/sessions in the final output folder. To do this explicitly, run with the `--forcerun clean`, or `-R clean` option.
+
 ## QC Reports
 
 The workflow automatically generates QC reports for each subject/session after heudiconv conversion. The reports include:
