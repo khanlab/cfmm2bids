@@ -686,3 +686,38 @@ rule clean:
         "logs/clean_final_bids/clean.log",
     script:
         "scripts/clean_final_bids.py"
+
+
+ruleorder: link_spim > assemble_final_bids
+
+from snakebids import generate_inputs
+spim_inputs = generate_inputs(bids_dir=config['spim']['bids_dir'],pybids_inputs=config['spim']['pybids_inputs'])
+print(spim_inputs)
+
+rule link_spim:
+    input:
+        spim_zarr = spim_inputs['ome_zarr'].path,
+        spim_json = spim_inputs['json'].path,
+    params:
+        out_zarr = lambda wildcards, output: Path(output.bids_subj_dir) / (config['spim']['out_path'].format(**wildcards) + '.ome.zarr'),
+        out_json = lambda wildcards, output: Path(output.bids_subj_dir) / (config['spim']['out_path'].format(**wildcards) + '.json'),
+    output:
+        bids_subj_dir=directory(final_bids_dir / "sub-{subject}" / "ses-{session}")
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=1,
+    log:
+        "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
+    shell:
+        "mkdir -p {output.bids_subj_dir}/micr && "
+        "ln -s {input.spim_zarr} {params.out_zarr} && "
+        "ln -s {input.spim_json} {params.out_json} "
+
+
+rule all_spim:
+    input:
+        bids_subj_dir=expand(final_bids_dir / "sub-{subject}" / "ses-{session}",
+                             subject=spim_inputs.subjects,
+                             session=config['spim']['session'])
+
