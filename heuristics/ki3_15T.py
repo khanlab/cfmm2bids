@@ -197,7 +197,6 @@ def infotodict(seqinfo):
         if "gre" in s.series_description.lower():
             info[t2w_gre].append(s.series_id)
 
-
         elif "tse2d" in s.series_description:
             info[t2w_tse].append(s.series_id)
 
