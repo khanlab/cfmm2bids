@@ -688,36 +688,72 @@ rule clean:
         "scripts/clean_final_bids.py"
 
 
-ruleorder: link_spim > assemble_final_bids
+if "spim" in config:
 
-from snakebids import generate_inputs
-spim_inputs = generate_inputs(bids_dir=config['spim']['bids_dir'],pybids_inputs=config['spim']['pybids_inputs'])
-print(spim_inputs)
+    ruleorder: link_spim > assemble_final_bids
 
-rule link_spim:
-    input:
-        spim_zarr = spim_inputs['ome_zarr'].path,
-        spim_json = spim_inputs['json'].path,
-    params:
-        out_zarr = lambda wildcards, output: Path(output.bids_subj_dir) / (config['spim']['out_path'].format(**wildcards) + '.ome.zarr'),
-        out_json = lambda wildcards, output: Path(output.bids_subj_dir) / (config['spim']['out_path'].format(**wildcards) + '.json'),
-    output:
-        bids_subj_dir=directory(final_bids_dir / "sub-{subject}" / "ses-{session}")
-    threads: 1
-    resources:
-        mem_mb=4000,
-        runtime=1,
-    log:
-        "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
-    shell:
-        "mkdir -p {output.bids_subj_dir}/micr && "
-        "ln -s {input.spim_zarr} {params.out_zarr} && "
-        "ln -s {input.spim_json} {params.out_json} "
+    from snakebids import generate_inputs
 
+    spim_targets = []
 
-rule all_spim:
-    input:
-        bids_subj_dir=expand(final_bids_dir / "sub-{subject}" / "ses-{session}",
-                             subject=spim_inputs.subjects,
-                             session=config['spim']['session'])
+    for ses, cfg in config["spim"].items():
+        config["spim"][ses]["inputs"] = generate_inputs(
+            bids_dir=cfg["bids_dir"], pybids_inputs=cfg["pybids_inputs"]
+        )
 
+        # get intersection of MRI subjects and SPIM subjects
+        subjects_spim = config["spim"][ses]["inputs"].subjects
+        subjects_spim_mri = set(subjects_spim) & set(subjects)
+        subjects_spim_no_mri = set(subjects_spim) - subjects_spim_mri
+
+        if len(subjects_spim_no_mri) > 0:
+            print(
+                f"WARNING: there are SPIM subjects that do not correspond to an MRI subject: {subjects_spim_no_mri}."
+            )
+            print(
+                "  This could be expected of batch controls, but if not may indicate incorrect subject labels"
+            )
+
+        spim_targets.extend(
+            expand(
+                final_bids_dir / "sub-{subject}" / "ses-{session}",
+                subject=list(subjects_spim_mri),
+                session=ses,
+            )
+        )
+
+    rule link_spim:
+        input:
+            spim_zarr=lambda wildcards: config["spim"][wildcards.session]["inputs"][
+                "ome_zarr"
+            ].path,
+            spim_json=lambda wildcards: config["spim"][wildcards.session]["inputs"][
+                "json"
+            ].path,
+        params:
+            out_zarr=lambda wildcards, output: Path(output.bids_subj_dir)
+            / (
+                config["spim"][wildcards.session]["out_path"].format(**wildcards)
+                + ".ome.zarr"
+            ),
+            out_json=lambda wildcards, output: Path(output.bids_subj_dir)
+            / (
+                config["spim"][wildcards.session]["out_path"].format(**wildcards)
+                + ".json"
+            ),
+        output:
+            bids_subj_dir=directory(final_bids_dir / "sub-{subject}" / "ses-{session}"),
+        threads: 1
+        resources:
+            mem_mb=4000,
+            runtime=1,
+        log:
+            "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
+        shell:
+            "mkdir -p {output.bids_subj_dir}/micr && "
+            "ln -s {input.spim_zarr} {params.out_zarr} && "
+            "ln -s {input.spim_json} {params.out_json} "
+
+    rule all_spim:
+        input:
+            spim_targets,
