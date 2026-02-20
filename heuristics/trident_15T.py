@@ -279,7 +279,7 @@ def infotodict(seqinfo):
 
         # Resting-state
         elif "rsfMRI" in s.series_description:
-            if "RPE" in s.series_description:
+            if "RPE" in s.series_description or "RV" in s.series_description:
                 info[func_resting_RV].append(s.series_id)
             else:
                 info[func_resting_R].append(s.series_id)
