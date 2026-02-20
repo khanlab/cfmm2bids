@@ -14,6 +14,7 @@ from workflow.lib.bids_fixes import (
     register_fix,
     remove_duplicate_niftis,
     remove_file,
+    split_multiecho_nifti,
     update_json,
 )
 
@@ -74,6 +75,7 @@ class TestRegisterFix:
         assert "update_json" in FIX_REGISTRY
         assert "fix_orientation_quadruped" in FIX_REGISTRY
         assert "remove_duplicate_niftis" in FIX_REGISTRY
+        assert "split_multiecho_nifti" in FIX_REGISTRY
 
 
 class TestRemoveFile:
@@ -446,3 +448,123 @@ class TestDescribeAvailableFixes:
         # Check for parts of the docstrings
         assert "Remove the file entirely" in result
         assert "Update JSON file fields" in result
+
+
+class TestSplitMultiechoNifti:
+    """Tests for the split_multiecho_nifti fix function."""
+
+    def _make_4d_nifti(self, tmp_path, name, shape=(10, 10, 10, 3), dtype=np.float32):
+        """Create a synthetic 4D NIfTI file and return its Path."""
+        data = np.random.rand(*shape).astype(dtype)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / name
+        nib.save(img, nii_path)
+        return nii_path
+
+    def test_split_multiecho_creates_echo_files(self, tmp_path):
+        """Test that echo volumes are created with correct echo- entity."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+
+        result = split_multiecho_nifti(nii_path, {})
+
+        assert result is True
+        for echo_num in range(1, 4):
+            echo_file = (
+                tmp_path / f"sub-XX_ses-YY_run-01_echo-{echo_num}_T2starw.nii.gz"
+            )
+            assert echo_file.exists(), f"Missing {echo_file.name}"
+
+    def test_split_multiecho_creates_avgecho_file(self, tmp_path):
+        """Test that the average echo image is created with rec-avgecho entity."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+
+        split_multiecho_nifti(nii_path, {})
+
+        avg_file = tmp_path / "sub-XX_ses-YY_rec-avgecho_run-01_T2starw.nii.gz"
+        assert avg_file.exists()
+
+    def test_split_multiecho_removes_original(self, tmp_path):
+        """Test that the original multi-echo file is removed."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+
+        split_multiecho_nifti(nii_path, {})
+
+        assert not nii_path.exists()
+
+    def test_split_multiecho_copies_json_sidecar(self, tmp_path):
+        """Test that JSON sidecars are copied for each output file."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+        json_path = tmp_path / "sub-XX_ses-YY_run-01_T2starw.json"
+        json_path.write_text('{"EchoTime": 0.02}')
+
+        split_multiecho_nifti(nii_path, {})
+
+        # JSON removed for original
+        assert not json_path.exists()
+        # JSON present for each echo and for avgecho
+        for echo_num in range(1, 4):
+            assert (
+                tmp_path / f"sub-XX_ses-YY_run-01_echo-{echo_num}_T2starw.json"
+            ).exists()
+        assert (tmp_path / "sub-XX_ses-YY_rec-avgecho_run-01_T2starw.json").exists()
+
+    def test_split_multiecho_echo_data_correct(self, tmp_path):
+        """Test that each echo volume contains the correct data slice."""
+        data = np.random.rand(10, 10, 10, 3).astype(np.float32)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / "sub-XX_run-01_T2starw.nii.gz"
+        nib.save(img, nii_path)
+
+        split_multiecho_nifti(nii_path, {})
+
+        for echo_idx in range(3):
+            echo_num = echo_idx + 1
+            echo_file = tmp_path / f"sub-XX_run-01_echo-{echo_num}_T2starw.nii.gz"
+            loaded = np.asanyarray(nib.load(echo_file).dataobj)
+            np.testing.assert_array_equal(loaded, data[..., echo_idx])
+
+    def test_split_multiecho_avgecho_data_correct(self, tmp_path):
+        """Test that the average echo image contains the mean of all echoes."""
+        data = np.random.rand(10, 10, 10, 3).astype(np.float32)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / "sub-XX_run-01_T2starw.nii.gz"
+        nib.save(img, nii_path)
+
+        split_multiecho_nifti(nii_path, {})
+
+        avg_file = tmp_path / "sub-XX_rec-avgecho_run-01_T2starw.nii.gz"
+        loaded_avg = np.asanyarray(nib.load(avg_file).dataobj)
+        expected_avg = np.mean(data, axis=3)
+        np.testing.assert_array_almost_equal(loaded_avg, expected_avg)
+
+    def test_split_multiecho_no_run_entity(self, tmp_path):
+        """Test correct entity placement when there is no run entity in the filename."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_T2starw.nii.gz")
+
+        split_multiecho_nifti(nii_path, {})
+
+        # echo- placed before suffix
+        assert (tmp_path / "sub-XX_ses-YY_echo-1_T2starw.nii.gz").exists()
+        # rec- placed before suffix
+        assert (tmp_path / "sub-XX_ses-YY_rec-avgecho_T2starw.nii.gz").exists()
+
+    def test_split_multiecho_returns_false_for_non_nifti(self, tmp_path):
+        """Test that split_multiecho_nifti returns False for non-NIfTI files."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("not a nifti")
+
+        result = split_multiecho_nifti(txt_file, {})
+
+        assert result is False
+
+    def test_split_multiecho_returns_false_for_3d_nifti(self, tmp_path):
+        """Test that split_multiecho_nifti returns False for 3D NIfTI files."""
+        data = np.random.rand(10, 10, 10).astype(np.float32)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / "sub-XX_T2starw.nii.gz"
+        nib.save(img, nii_path)
+
+        result = split_multiecho_nifti(nii_path, {})
+
+        assert result is False
+        assert nii_path.exists()  # original should be unchanged
