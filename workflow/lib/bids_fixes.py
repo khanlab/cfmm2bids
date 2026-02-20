@@ -9,6 +9,8 @@ They are auto-registered via the @register_fix decorator.
 import hashlib
 import json
 import logging
+import re
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -227,6 +229,99 @@ def remove_duplicate_niftis(paths: list[Path], spec: dict) -> int:
                     files_removed += 1
 
     return files_removed
+
+
+@register_fix("split_multiecho_nifti")
+def split_multiecho_nifti(path: Path, spec: dict) -> bool:
+    """Split a multi-echo NIfTI into separate echo volumes and an average echo image.
+
+    Expects a 4D NIfTI where the 4th dimension indexes echoes.  Produces one
+    3D file per echo (``echo-N`` entity placed after ``run-``) and one average
+    echo image (``rec-avgecho`` entity placed before ``run-``), then removes
+    the original combined file.  JSON sidecars are copied for every output
+    file and the original sidecar is removed alongside the NIfTI.
+    """
+    if not any(path.name.endswith(ext) for ext in [".nii", ".nii.gz"]):
+        return False
+
+    img = nib.load(path)
+
+    # Use img.shape to check dimensions before loading full data array
+    if len(img.shape) != 4 or img.shape[3] < 2:
+        return False
+
+    data = np.asanyarray(img.dataobj)
+    n_echoes = data.shape[3]
+
+    # Parse filename base and extension
+    if path.name.endswith(".nii.gz"):
+        ext = ".nii.gz"
+        base = path.name[:-7]
+    else:
+        ext = ".nii"
+        base = path.name[:-4]
+
+    # Locate the run entity so we can place echo- / rec- correctly
+    run_match = re.search(r"(_run-[^_]+)", base)
+
+    # JSON sidecar path (same stem, .json extension)
+    json_path = (
+        path.with_suffix("").with_suffix(".json")
+        if ext == ".nii.gz"
+        else path.with_suffix(".json")
+    )
+
+    # Save individual echo volumes
+    for echo_idx in range(n_echoes):
+        echo_num = echo_idx + 1
+        echo_data = data[..., echo_idx]
+        echo_img = nib.Nifti1Image(echo_data, img.affine, img.header)
+
+        # echo- placed immediately after run- (BIDS spec)
+        if run_match:
+            echo_base = (
+                base[: run_match.end()] + f"_echo-{echo_num}" + base[run_match.end() :]
+            )
+        else:
+            last_us = base.rfind("_")
+            if last_us >= 0:
+                echo_base = base[:last_us] + f"_echo-{echo_num}" + base[last_us:]
+            else:
+                echo_base = base + f"_echo-{echo_num}"
+
+        nib.save(echo_img, path.parent / (echo_base + ext))
+
+        if json_path.exists():
+            shutil.copy2(json_path, path.parent / (echo_base + ".json"))
+
+    # Create average echo image (float32) with rec-avgecho entity
+    avg_data = np.mean(data, axis=3).astype(np.float32)
+    avg_img = nib.Nifti1Image(avg_data, img.affine, img.header)
+    avg_img.set_data_dtype(np.float32)
+
+    # rec- placed immediately before run- (BIDS spec)
+    if run_match:
+        avg_base = (
+            base[: run_match.start()] + "_rec-avgecho" + base[run_match.start() :]
+        )
+    else:
+        last_us = base.rfind("_")
+        if last_us >= 0:
+            avg_base = base[:last_us] + "_rec-avgecho" + base[last_us:]
+        else:
+            avg_base = base + "_rec-avgecho"
+
+    nib.save(avg_img, path.parent / (avg_base + ext))
+
+    if json_path.exists():
+        shutil.copy2(json_path, path.parent / (avg_base + ".json"))
+
+    # Remove the original multi-echo file and its JSON sidecar
+    path.unlink()
+    if json_path.exists():
+        json_path.unlink()
+
+    return True
 
 
 def describe_available_fixes():
