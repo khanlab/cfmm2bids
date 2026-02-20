@@ -82,13 +82,18 @@ post_convert_fixes:
     updates:
       Units: rad
 
-  - name: split_multiecho_t2starw
-    pattern: "anat/*T2starw.nii.gz"
-    action: split_multiecho_nifti
-
   - name: reset_orientation
     pattern: "*/*.nii.gz"
     action: fix_orientation_quadruped
+
+  - name: split_multiecho_t2starw
+    pattern: "anat/*T2starw.nii.gz"
+    action: split_multiecho_nifti
+    
+  - name: remove_scans_tsv
+    pattern: "*scans.tsv"
+    action: remove
+
 
 
 #intermediate output folders
