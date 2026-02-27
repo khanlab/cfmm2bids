@@ -82,8 +82,8 @@ study_filter_specs:
     # Mapping from numeric time intervals to session labels (OPTIONAL)
     # If not specified, generates labels like '0m', '6m', '12m' automatically
     # Custom mapping example (e.g., for time since baseline):
-    #time_to_label:
-    #  0: '12m'
+    time_to_label:
+      0: '12m'
  
 # 3. download
 cfmm2tar_download_options: '--skip-derived'
