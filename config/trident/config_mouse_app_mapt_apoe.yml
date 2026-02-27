@@ -1,0 +1,128 @@
+# general 
+credentials_file: ~/.uwo_credentials.bd
+final_bids_dir: "/nfs/trident3/mri/prado/mouse_app_mapt_apoe/bids"
+
+# 1. query
+search_specs:
+  - dicom_query:
+      study_description:  "Schmitz^MouseAD"
+      study_date: 
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: 'APOE\*[34]-([0-9]+-[0-9]-[MF]#[0-9])$'
+        sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+        map:
+          '202F4': AA202F4
+          '202F5': AA202F5
+          '213F1': AA213F1
+          '213M4': AA213M4
+          '261F1': AA261F1
+          '261F2': AA261F2  #was the e2 suffix necessary?
+          '261F4': AA261F4 
+          '261M5': AA261M5
+          '261M6': AA261M6
+          '261M7': AA261M7
+          '261M8': AA261M8
+          '181F6': AA181F6
+          '182M1': AA182M1 
+          '182M3': AA182M3
+          '182M4': AA182M4 
+          '212F1': AA212F1 
+          '212F2': AA212F2 
+          '203F1': AA203F1
+          '203F2': AA203F2
+          '203M4': AA203M4 
+          '203M5': AA203M5
+          '204F5': AA204F5
+          '204F6': AA204F6
+          '204M1': AA204M1
+          '204M2': AA204M2 
+
+      session:
+        source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+
+ 
+query_kwargs:
+  additional_tags:
+ #   "00100030": PatientBirthDate
+  
+
+
+# 2. filter
+study_filter_specs:
+  include:
+  exclude:
+    - "subject != subject"                  # Exclude if subject is NaN
+  remap_sessions_by_date:
+    # Enable/disable session remapping (REQUIRED if section is present)
+    enable: true
+    # Time units for intervals (OPTIONAL, default: 'months')
+    # Options: 'days', 'months', 'years'
+    units: 'months'
+    
+    # Rounding step for time intervals (OPTIONAL, default: 6)
+    # For example, with units='months' and round_step=1:
+    #   - Sessions will be labeled by rounded month intervals (0m, 1m, 2m, etc.)
+    round_step: 3
+    
+    # Zero-pad session labels (OPTIONAL, default: false)
+    # If true, pads session labels with leading zeros for proper alphanumeric sorting
+    # Example: '00m', '06m', '12m' instead of '0m', '6m', '12m'
+    #zero_pad: true
+    
+    # Reference date mode (OPTIONAL)
+    # Default (commented out): Uses first session per subject as reference (baseline mode)
+    # Alternative: Use PatientBirthDate to calculate age at scan
+    # reference_col: 'PatientBirthDate'
+    # reference_format: '%Y%m%d'
+ 
+    # Mapping from numeric time intervals to session labels (OPTIONAL)
+    # If not specified, generates labels like '0m', '6m', '12m' automatically
+    # Custom mapping example (e.g., for time since baseline):
+    #time_to_label:
+    #  0: '12m'
+ 
+# 3. download
+cfmm2tar_download_options: '--skip-derived'
+merge_duplicate_studies: False  
+
+
+
+# 4. convert
+heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
+heuristic: heuristics/Schmitz^MouseAD_heuristic.py
+dcmconfig_json: resources/dcm2niix_config.json
+
+
+
+# 5. fix 
+post_convert_fixes:
+  - name: phase_units
+    pattern: "*/*_part-phase_*.json"
+    action: update_json
+    updates:
+      Units: rad
+
+  - name: reset_orientation
+    pattern: "*/*.nii.gz"
+    action: fix_orientation_quadruped
+
+
+#intermediate output folders
+stages:
+  query: "results/mouse_app_mapt_apoe/0_query"
+  filter: "results/mouse_app_mapt_apoe/1_filter"
+  download: "results/mouse_app_mapt_apoe/2_download"
+  convert: "results/mouse_app_mapt_apoe/3_convert"
+  fix: "results/mouse_app_mapt_apoe/4_fix"
+
+ 
+# Centralized download cache 
+# Downloads are cached by StudyInstanceUID to avoid re-downloading
+# the same data when subject/session mappings differ
+# Default: "results/download_cache"
+download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
+
