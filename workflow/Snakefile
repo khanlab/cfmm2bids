@@ -22,11 +22,25 @@ stage_filter = Path(stages.get("filter", "results/1_filter"))
 stage_download = Path(stages.get("download", "results/2_download"))
 stage_convert = Path(stages.get("convert", "results/3_convert"))
 stage_fix = Path(stages.get("fix", "results/4_fix"))
+stage_gradcorr = Path(stages.get("gradcorr", "results/5_gradcorr"))
 
 # Centralized download cache
 download_cache = Path(config.get("download_cache", "results/download_cache"))
 
 final_bids_dir = Path(config.get("final_bids_dir", "bids"))
+
+# Gradient nonlinearity correction settings
+gradcorrect_config = config.get("gradcorrect", {})
+use_gradcorrect = gradcorrect_config.get("enable", False)
+
+if use_gradcorrect and not gradcorrect_config.get("grad_coeff_file"):
+    raise ValueError(
+        "gradcorrect is enabled but 'gradcorrect.grad_coeff_file' is not set in config. "
+        "Please provide the path to the gradient coefficient file."
+    )
+
+# Stage used for final assembly - gradcorr if enabled, otherwise fix
+stage_for_assembly = stage_gradcorr if use_gradcorrect else stage_fix
 
 # ----------
 # 0 - query
@@ -452,12 +466,13 @@ rule assemble_fix_bids:
     """
     Assemble the fixed BIDS dataset from staging directory.
     This ensures the BIDS directory is always clean and matches the requested subjects.
+    When gradcorrect is enabled, subject/session dirs are sourced from the gradcorr stage.
     """
     input:
         dataset_description=stage_fix / "bids-staging/dataset_description.json",
         ignore=stage_fix / "bids-staging/.bidsignore",
         bids_subj_dirs=expand(
-            stage_fix / "bids-staging/sub-{subject}/ses-{session}",
+            stage_for_assembly / "bids-staging/sub-{subject}/ses-{session}",
             zip,
             subject=subjects,
             session=sessions,
@@ -484,6 +499,35 @@ rule assemble_fix_bids:
         "cp {input.dataset_description} {output.bids_dir} &>> {log} && "
         "cp {input.ignore} {output.bids_dir} &>> {log} && "
         "{params.cmd_cp_subj_dirs}"
+
+
+rule gradcorrect:
+    """
+    Apply gradient nonlinearity correction using the gradcorrect BIDS app.
+    Runs per-subject/session using the fixed BIDS staging data as input.
+    Only used when gradcorrect is enabled in the config (gradcorrect.enable: true).
+    Requires Singularity/Apptainer to run the container.
+    """
+    input:
+        bids_subj_dir=stage_fix / "bids-staging/sub-{subject}/ses-{session}",
+    output:
+        bids_subj_dir=directory(
+            stage_gradcorr / "bids-staging/sub-{subject}/ses-{session}"
+        ),
+    params:
+        grad_coeff_file=gradcorrect_config.get("grad_coeff_file"),
+    log:
+        "logs/gradcorrect/sub-{subject}_ses-{session}.log",
+    threads: 1
+    resources:
+        mem_mb=16000,
+        runtime=120,
+    container:
+        "docker://khanlab/gradcorrect:v0.0.3a"
+    shell:
+        "run.sh {input.bids_subj_dir} {output.bids_subj_dir} "
+        "--grad-coeff-file {params.grad_coeff_file} participant "
+        "&> {log}"
 
 
 rule validate_fixed:
@@ -623,10 +667,11 @@ rule assemble_final_bids:
     Now outputs individual session directories and top-level files as separate entities,
     allowing for incremental updates instead of regenerating the entire directory.
     Uses cp -RL to follow symlinks and copy actual files instead of broken symlinks.
+    When gradcorrect is enabled, subject/session dirs are sourced from the gradcorr stage.
     """
     input:
         validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-        bids_subj_dir=stage_fix / "bids-staging/sub-{subject}/ses-{session}",
+        bids_subj_dir=stage_for_assembly / "bids-staging/sub-{subject}/ses-{session}",
     output:
         bids_subj_dir=directory(final_bids_dir / "sub-{subject}/ses-{session}"),
     threads: 1
