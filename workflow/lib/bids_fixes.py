@@ -71,6 +71,72 @@ def update_json(path: Path, spec: dict) -> bool:
     return True
 
 
+def _find_bids_root(path: Path) -> Path | None:
+    """Find the BIDS dataset root from a path inside the dataset.
+
+    Traverses parent directories until a ``sub-*`` directory is found,
+    then returns its parent (the BIDS root).  Returns ``None`` when no
+    such parent can be located.
+    """
+    for parent in path.parents:
+        if parent.name.startswith("sub-"):
+            return parent.parent
+    return None
+
+
+@register_fix("intended_for")
+def fix_intended_for(path: Path, spec: dict) -> bool:
+    """Populate IntendedFor in a fieldmap JSON with paths to matching NIfTI files.
+
+    Searches for NIfTI files matching ``target_pattern`` within the same
+    session directory as the fieldmap JSON and sets the ``IntendedFor``
+    field using the ``bids::`` URI format required by the BIDS specification.
+
+    Spec fields
+    -----------
+    target_pattern : str
+        Glob pattern for target NIfTI files, relative to the session
+        directory (e.g. ``"func/*bold.nii.gz"``).
+    """
+    if path.suffix != ".json":
+        return False
+
+    target_pattern = spec.get("target_pattern", "")
+    if not target_pattern:
+        logger.warning(f"intended_for fix: no target_pattern specified for {path}")
+        return False
+
+    # The session directory is the parent of the modality folder (e.g. fmap/).
+    session_dir = path.parent.parent
+
+    bids_root = _find_bids_root(path)
+    if bids_root is None:
+        logger.warning(f"intended_for fix: could not determine BIDS root for {path}")
+        return False
+
+    # Collect target NIfTI files within the session directory.
+    target_paths = sorted(session_dir.glob(target_pattern))
+
+    if not target_paths:
+        logger.warning(
+            f"intended_for fix: no targets matching '{target_pattern}' in {session_dir}"
+        )
+        return False
+
+    # Construct bids::-prefixed relative paths.
+    intended_for = [
+        f"bids::{p.relative_to(bids_root).as_posix()}" for p in target_paths
+    ]
+
+    with open(path) as f:
+        data = json.load(f)
+    data["IntendedFor"] = intended_for
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    return True
+
+
 def _axcodes2aff(axcodes, scale, translate, labels=None):
     """Create a homogeneous affine from axis codes.
 
