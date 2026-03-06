@@ -327,6 +327,15 @@ post_convert_fixes:
   #   pattern: "."
   #   action: remove_duplicate_niftis
 
+  # Example 6: Set IntendedFor in fieldmap JSON files
+  #   The target_pattern is a glob relative to the session directory.
+  #   Matching NIfTI files are added to the IntendedFor field using the
+  #   bids:: URI format (e.g. bids::sub-01/ses-pre/func/*bold.nii.gz).
+  # - name: fmap_intended_for
+  #   pattern: "fmap/*.json"
+  #   action: intended_for
+  #   target_pattern: "func/*bold.nii.gz"
+
 # Lines to add to the .bidsignore file
 # bidsignore:
 #  -
