@@ -46,7 +46,7 @@ search_specs:
   - dicom_query:
       study_description:  "Menon^AS-MBN"
       patient_name: "*_AS16*"
-      study_date: 20240712-
+      study_date: 20240712-20240921
     metadata_mappings:
       subject:
         source: PatientName
@@ -58,7 +58,22 @@ search_specs:
         source: StudyDate
         # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
 
- 
+  - dicom_query:
+      study_description:  "Menon^AS-MBN"
+      patient_name: "*_AS2*"
+      study_date: 20241108-20250305
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '_(AS[0-9]+[MF][0-9])$'
+        sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+   
+      session:
+        source: StudyDate
+        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+
+
 query_kwargs:
   additional_tags:
  #   "00100030": PatientBirthDate
