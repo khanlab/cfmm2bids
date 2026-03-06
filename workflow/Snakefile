@@ -236,6 +236,7 @@ rule link_to_tar:
     resources:
         mem_mb=4000,
         runtime=5,
+    localrule: True
     script:
         "scripts/link_to_tar.py"
 
@@ -278,32 +279,32 @@ rule heudiconv:
         "scripts/run_heudiconv.py"
 
 
-rule bidsignore_convert_staging:
+rule bidsignore:
     params:
         lines=config.get("bidsignore", []),
     output:
-        ignore=stage_convert / "bids-staging/.bidsignore",
+        ignore="{prefix}/bids-staging/.bidsignore",
     resources:
         mem_mb=4000,
         runtime=10,
+    localrule: True
     run:
         with open(output.ignore, "w") as file:
             for item in params.lines:
                 file.write(item + "\n")
 
 
-rule dataset_description_for_convert_staging:
+rule dataset_description:
     input:
         "resources/dataset_description.json",
     output:
-        stage_convert / "bids-staging/dataset_description.json",
-    log:
-        "logs/dataset_description/init_dataset_description_staging.log",
+        "{prefix}/bids-staging/dataset_description.json",
     resources:
         mem_mb=4000,
         runtime=1,
+    localrule: True
     shell:
-        "cp {input} {output} &> {log}"
+        "cp {input} {output}"
 
 
 rule generate_convert_qc_figs:
@@ -433,33 +434,6 @@ rule post_convert_fix:
         "scripts/post_convert_fix.py"
 
 
-rule bidsignore_post_convert_fix_staging:
-    params:
-        lines=config.get("bidsignore", []),
-    output:
-        ignore=stage_fix / "bids-staging/.bidsignore",
-    resources:
-        mem_mb=4000,
-        runtime=10,
-    run:
-        with open(output.ignore, "w") as file:
-            for item in params.lines:
-                file.write(item + "\n")
-
-
-rule dataset_description_fixed_staging:
-    input:
-        dd_json=stage_convert / "bids-staging/dataset_description.json",
-    output:
-        dd_json=stage_fix / "bids-staging/dataset_description.json",
-    log:
-        "logs/fix/dataset_description_staging.log",
-    threads: 1
-    resources:
-        mem_mb=4000,
-        runtime=10,
-    shell:
-        "cp {input.dd_json} {output.dd_json} &> {log}"
 
 
 rule assemble_fix_bids:
@@ -516,6 +490,8 @@ rule gradcorrect:
         ),
     params:
         grad_coeff_file=gradcorrect_config.get("grad_coeff_file"),
+        bids_in=lambda wildcards, input: str(Path(input.bids_subj_dir).parent.parent),
+        bids_out=lambda wildcards, output: str(Path(output.bids_subj_dir).parent.parent),
     log:
         "logs/gradcorrect/sub-{subject}_ses-{session}.log",
     threads: 1
@@ -524,9 +500,10 @@ rule gradcorrect:
         runtime=120,
     container:
         "docker://khanlab/gradcorrect:v0.0.3a"
+    shadow: 'minimal'
     shell:
-        "run.sh {input.bids_subj_dir} {output.bids_subj_dir} "
-        "--grad-coeff-file {params.grad_coeff_file} participant "
+        "run.sh {params.bids_in} {params.bids_out} participant "
+        "--grad-coeff-file {params.grad_coeff_file}"
         "&> {log}"
 
 
@@ -678,6 +655,7 @@ rule assemble_final_bids:
     resources:
         mem_mb=4000,
         runtime=5,
+    localrule: True
     log:
         "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
     shell:
@@ -700,6 +678,7 @@ rule copy_final_bids_top_level_files:
     resources:
         mem_mb=4000,
         runtime=1,
+    localrule: True
     log:
         "logs/assemble_final_bids/copy_{filename}.log",
     shell:
