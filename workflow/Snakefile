@@ -434,8 +434,6 @@ rule post_convert_fix:
         "scripts/post_convert_fix.py"
 
 
-
-
 rule assemble_fix_bids:
     """
     Assemble the fixed BIDS dataset from staging directory.
@@ -481,17 +479,21 @@ rule gradcorrect:
     Runs per-subject/session using the fixed BIDS staging data as input.
     Only used when gradcorrect is enabled in the config (gradcorrect.enable: true).
     Requires Singularity/Apptainer to run the container.
+
+    Creates a local BIDS input directory (using symlinks) containing only the
+    target subject/session, runs gradcorrect on it, then moves the corrected
+    subject/session directory to the final output location.
     """
     input:
         bids_subj_dir=stage_fix / "bids-staging/sub-{subject}/ses-{session}",
+        dataset_description=stage_fix / "bids-staging/dataset_description.json",
+        bidsignore=stage_fix / "bids-staging/.bidsignore",
     output:
         bids_subj_dir=directory(
             stage_gradcorr / "bids-staging/sub-{subject}/ses-{session}"
         ),
     params:
         grad_coeff_file=gradcorrect_config.get("grad_coeff_file"),
-        bids_in=lambda wildcards, input: str(Path(input.bids_subj_dir).parent.parent),
-        bids_out=lambda wildcards, output: str(Path(output.bids_subj_dir).parent.parent),
     log:
         "logs/gradcorrect/sub-{subject}_ses-{session}.log",
     threads: 1
@@ -500,11 +502,8 @@ rule gradcorrect:
         runtime=120,
     container:
         "docker://khanlab/gradcorrect:v0.0.3a"
-    shadow: 'minimal'
-    shell:
-        "run.sh {params.bids_in} {params.bids_out} participant "
-        "--grad-coeff-file {params.grad_coeff_file}"
-        "&> {log}"
+    script:
+        "scripts/gradcorrect.py"
 
 
 rule validate_fixed:
