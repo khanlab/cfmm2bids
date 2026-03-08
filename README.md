@@ -14,7 +14,7 @@ A Snakemake workflow for converting CFMM DICOM data to BIDS format using heudico
 
 ## Workflow Stages
 
-The workflow is organized into 5 main processing stages plus a final copy stage, each producing intermediate outputs:
+The workflow is organized into 5 main processing stages (plus an optional gradcorrect stage) and a final copy stage, each producing intermediate outputs:
 
 **Note on BIDS staging:** The convert and fix stages use a two-step assembly process:
 1. Individual subject/session data is first written to `bids-staging/sub-*/ses-*/` directories
@@ -85,7 +85,18 @@ Outputs:
 - `qc/bids_validator.json` - Post-fix BIDS validation results
 - `qc/aggregate_report.html` - Aggregate QC report including fix provenance
 
-### 6. Final Stage (`bids/`)
+### 6. Gradcorrect Stage (`results/5_gradcorr`) (optional)
+Applies gradient nonlinearity correction using the [gradcorrect BIDS app](https://github.com/khanlab/gradcorrect).
+Enabled via the `gradcorrect.enable: true` config option. Requires Singularity/Apptainer and a
+gradient coefficient file (`gradcorrect.grad_coeff_file`).
+
+When enabled, the corrected per-subject/session directories replace the fix-stage directories
+as input for the final BIDS assembly.
+
+Outputs:
+- `bids-staging/sub-*/ses-*/` - Gradient-corrected BIDS data per subject/session
+
+### 7. Final Stage (`bids/`)
 Copies the validated and fixed BIDS dataset to the final output directory.
 
 Note: the workflow will not automatically clean-up subjects/sessions in the final output folder. To do this explicitly, run with the `--forcerun clean`, or `-R clean` option.

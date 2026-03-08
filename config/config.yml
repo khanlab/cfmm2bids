@@ -341,6 +341,23 @@ post_convert_fixes:
 #  -
 
 # ============================================================================
+# 6. GRADCORRECT STAGE - Gradient nonlinearity correction (OPTIONAL)
+# ============================================================================
+# Apply gradient nonlinearity correction using the gradcorrect BIDS app.
+# When enabled, this stage runs after the fix stage and the corrected
+# subject/session directories are used for the final BIDS assembly.
+# Requires Singularity/Apptainer to run the container; pass
+# --use-singularity (or --use-apptainer) to Snakemake when running.
+
+gradcorrect:
+  # Enable gradient nonlinearity correction (OPTIONAL, default: false)
+  enable: false
+
+  # Path to gradient coefficient file (REQUIRED when enable is true;
+  # the workflow will raise an error at startup if this is missing)
+  # grad_coeff_file: "path/to/gradient_coeff.grad"
+
+# ============================================================================
 # INTERMEDIATE OUTPUT FOLDERS (OPTIONAL)
 # ============================================================================
 # Customize the directories for intermediate workflow stages.
@@ -354,6 +371,7 @@ stages:
   download: "results/2_download"  # Downloaded DICOMs
   convert: "results/3_convert"    # Initial BIDS conversion + QC reports
   fix: "results/4_fix"            # Fixed BIDS dataset
+  gradcorr: "results/5_gradcorr"  # Gradient nonlinearity corrected BIDS dataset
 
 # Centralized download cache (OPTIONAL)
 # Downloads are cached by StudyInstanceUID to avoid re-downloading
