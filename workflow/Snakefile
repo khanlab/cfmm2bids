@@ -496,22 +496,22 @@ rule gradcorrect:
         grad_coeff_file=gradcorrect_config.get("grad_coeff_file"),
     log:
         "logs/gradcorrect/sub-{subject}_ses-{session}.log",
-    threads: 1
+    threads: 2
     resources:
-        mem_mb=16000,
-        runtime=120,
+        mem_mb=40000,
+        runtime=240,
     container:
         "docker://khanlab/gradcorrect:v0.0.3a"
     shadow:
         "minimal"
     shell:
-        "mkdir -p bids_in/sub-{wildcards.subject} bids_out &> {log} && "
+        "mkdir -p bids_in/sub-{wildcards.subject} &> {log} && "
         "ln -sr {input.dataset_description} bids_in/ &>> {log} && "
         "ln -sr {input.bidsignore} bids_in/ &>> {log} && "
         "ln -sr {input.bids_subj_dir} "
         "bids_in/sub-{wildcards.subject}/ses-{wildcards.session} &>> {log} && "
         "run.sh bids_in bids_out participant "
-        "--grad-coeff-file {params.grad_coeff_file} &>> {log} && "
+        "--grad_coeff_file {params.grad_coeff_file} &>> {log} && "
         "mkdir -p $(dirname {output.bids_subj_dir}) &>> {log} && "
         "mv bids_out/sub-{wildcards.subject}/ses-{wildcards.session} "
         "{output.bids_subj_dir} &>> {log}"
