@@ -96,8 +96,21 @@ as input for the final BIDS assembly.
 Outputs:
 - `bids-staging/sub-*/ses-*/` - Gradient-corrected BIDS data per subject/session
 
+#### Uncorrected BIDS dataset (optional)
+When gradcorrect is enabled, you can also request that the uncorrected (fix-stage) BIDS dataset
+be assembled alongside the gradient-corrected one by setting `gradcorrect.create_bids_uncorr: true`.
+This is useful because:
+- The gradient-corrected dataset has been resampled, so the raw data may be needed for some analyses.
+- Some series are dropped by gradcorrect (e.g. series with online distortion correction applied by
+  the scanner), and these will still be present in the uncorrected dataset.
+
+The uncorrected dataset is written to `final_bids_uncorr_dir` (default: `bids_uncorr`).
+
 ### 7. Final Stage (`bids/`)
 Copies the validated and fixed BIDS dataset to the final output directory.
+When gradcorrect is enabled, gradient-corrected data is used. If `gradcorrect.create_bids_uncorr`
+is also enabled, the uncorrected data is additionally copied to `bids_uncorr/` (or the path set
+by `final_bids_uncorr_dir`).
 
 Note: the workflow will not automatically clean-up subjects/sessions in the final output folder. To do this explicitly, run with the `--forcerun clean`, or `-R clean` option.
 

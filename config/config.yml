@@ -23,6 +23,11 @@ credentials_file: ~/.uwo_credentials.bd
 # Default: "bids"
 final_bids_dir: "bids"
 
+# Final output directory for the uncorrected BIDS dataset (OPTIONAL)
+# Only used when gradcorrect is enabled and gradcorrect.create_bids_uncorr is true.
+# Default: "bids_uncorr"
+# final_bids_uncorr_dir: "bids_uncorr"
+
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
 # query parameters haven't changed, the workflow will skip re-querying.
@@ -356,6 +361,14 @@ gradcorrect:
   # Path to gradient coefficient file (REQUIRED when enable is true;
   # the workflow will raise an error at startup if this is missing)
   # grad_coeff_file: "path/to/gradient_coeff.grad"
+
+  # Also create an uncorrected BIDS dataset alongside the corrected one (OPTIONAL, default: false)
+  # Only relevant when enable is true.
+  # This is useful because the gradient-corrected BIDS dataset has been resampled, so it
+  # is helpful to retain the raw data. It also preserves series that gradcorrect drops
+  # (e.g. series with online distortion correction applied by the scanner).
+  # The uncorrected dataset is written to final_bids_uncorr_dir (default: "bids_uncorr").
+  # create_bids_uncorr: false
 
 # ============================================================================
 # INTERMEDIATE OUTPUT FOLDERS (OPTIONAL)
