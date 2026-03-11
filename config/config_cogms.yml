@@ -1,6 +1,9 @@
 credentials_file: ~/.uwo_credentials.bd
-final_bids_dir: "/nfs/scratch/akhan488/cogms-cfmm2bids/bids"
+final_bids_dir: "/nfs/scratch/akhan488/cogms-cfmm2bids/bids_gradcorr"
 
+final_bids_uncorr_dir: "/nfs/scratch/akhan488/cogms-cfmm2bids/bids_nogradcorr"
+
+#
 # 1. query
 search_specs:
   - dicom_query:
@@ -166,6 +169,7 @@ gradcorrect:
   grad_coeff_file: "/nfs/khan/software/gradcorrect/coeff_AC84.grad"
 
 
+  create_bids_uncorr: true
 
 
 bidsignore:
