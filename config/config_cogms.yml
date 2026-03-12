@@ -122,13 +122,19 @@ post_convert_fixes:
     pattern: "*/*part-phase*.json"
     action: update_json
     updates:
-      Units: rad
+      Units: rad/s
 
   - name: phase_units_
     pattern: "*/*phase.json"
     action: update_json
     updates:
-      Units: rad
+      Units: rad/s
+
+  - name: phasediff_units
+    pattern: "fmap/*phasediff.json"
+    action: update_json
+    updates:
+      Units: rad/s
 
   - name: remove_dupe_t1maps
     pattern: "*/*run-*_*T1map.nii.gz"
