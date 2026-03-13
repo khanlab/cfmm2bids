@@ -90,13 +90,21 @@ def fix_intended_for(path: Path, spec: dict) -> bool:
 
     Searches for NIfTI files matching ``target_pattern`` within the same
     session directory as the fieldmap JSON and sets the ``IntendedFor``
-    field using the ``bids::`` URI format required by the BIDS specification.
+    field.  By default paths are written relative to the subject directory
+    (e.g. ``"ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"``), which is
+    the format expected by most BIDS apps (including fMRIPrep).  Set
+    ``use_bids_uri: true`` in the spec to use the ``bids::`` URI format
+    instead.
 
     Spec fields
     -----------
     target_pattern : str
         Glob pattern for target NIfTI files, relative to the session
         directory (e.g. ``"func/*bold.nii.gz"``).
+    use_bids_uri : bool, optional
+        When ``true``, write paths using the ``bids::`` URI scheme
+        (e.g. ``"bids::sub-01/ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"``).
+        Defaults to ``false``.
     """
     if path.suffix != ".json":
         return False
@@ -106,13 +114,18 @@ def fix_intended_for(path: Path, spec: dict) -> bool:
         logger.warning(f"intended_for fix: no target_pattern specified for {path}")
         return False
 
+    use_bids_uri = bool(spec.get("use_bids_uri", False))
+
     # The session directory is the parent of the modality folder (e.g. fmap/).
     session_dir = path.parent.parent
 
-    bids_root = _find_bids_root(path)
-    if bids_root is None:
-        logger.warning(f"intended_for fix: could not determine BIDS root for {path}")
-        return False
+    if use_bids_uri:
+        bids_root = _find_bids_root(path)
+        if bids_root is None:
+            logger.warning(
+                f"intended_for fix: could not determine BIDS root for {path}"
+            )
+            return False
 
     # Collect target NIfTI files within the session directory.
     target_paths = sorted(session_dir.glob(target_pattern))
@@ -123,10 +136,15 @@ def fix_intended_for(path: Path, spec: dict) -> bool:
         )
         return False
 
-    # Construct bids::-prefixed relative paths.
-    intended_for = [
-        f"bids::{p.relative_to(bids_root).as_posix()}" for p in target_paths
-    ]
+    if use_bids_uri:
+        intended_for = [
+            f"bids::{p.relative_to(bids_root).as_posix()}" for p in target_paths
+        ]
+    else:
+        # Paths relative to the subject directory (fMRIPrep-compatible format),
+        # e.g. "ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz".
+        subject_dir = session_dir.parent
+        intended_for = [p.relative_to(subject_dir).as_posix() for p in target_paths]
 
     with open(path) as f:
         data = json.load(f)
