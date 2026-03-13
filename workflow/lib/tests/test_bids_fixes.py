@@ -612,7 +612,7 @@ class TestFixIntendedFor:
         return bids_root, fmap_dir, func_dir
 
     def test_fix_intended_for_sets_intended_for(self, tmp_path):
-        """Test that fix_intended_for sets IntendedFor with bids:: paths."""
+        """Test that fix_intended_for sets IntendedFor with session-relative paths by default."""
         bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
 
         fmap_json = fmap_dir / "sub-01_ses-pre_acq-pe_epi.json"
@@ -624,6 +624,30 @@ class TestFixIntendedFor:
         bold2.write_text("")
 
         spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert "IntendedFor" in data
+        assert sorted(data["IntendedFor"]) == [
+            "func/sub-01_ses-pre_task-motor_run-1_bold.nii.gz",
+            "func/sub-01_ses-pre_task-motor_run-2_bold.nii.gz",
+        ]
+
+    def test_fix_intended_for_sets_intended_for_bids_uri(self, tmp_path):
+        """Test that fix_intended_for sets IntendedFor with bids:: paths when use_bids_uri is True."""
+        bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_acq-pe_epi.json"
+        fmap_json.write_text(json.dumps({"EchoTime": 0.02}))
+
+        bold1 = func_dir / "sub-01_ses-pre_task-motor_run-1_bold.nii.gz"
+        bold2 = func_dir / "sub-01_ses-pre_task-motor_run-2_bold.nii.gz"
+        bold1.write_text("")
+        bold2.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz", "use_bids_uri": True}
         result = fix_intended_for(fmap_json, spec)
 
         assert result is True
@@ -650,9 +674,7 @@ class TestFixIntendedFor:
 
         with open(fmap_json) as f:
             data = json.load(f)
-        assert data["IntendedFor"] == [
-            "bids::sub-01/ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"
-        ]
+        assert data["IntendedFor"] == ["func/sub-01_ses-pre_task-rest_bold.nii.gz"]
 
     def test_fix_intended_for_returns_false_for_non_json(self, tmp_path):
         """Test that fix_intended_for returns False for non-JSON files."""
@@ -687,14 +709,41 @@ class TestFixIntendedFor:
 
         assert result is False
 
-    def test_fix_intended_for_returns_false_when_no_bids_root(self, tmp_path):
-        """Test that fix_intended_for returns False when BIDS root cannot be found."""
+    def test_fix_intended_for_returns_false_when_no_bids_root_and_bids_uri(
+        self, tmp_path
+    ):
+        """Test that fix_intended_for returns False when use_bids_uri=True and BIDS root cannot be found."""
         fmap_dir = tmp_path / "fmap"
+        func_dir = tmp_path / "func"
         fmap_dir.mkdir()
+        func_dir.mkdir()
         fmap_json = fmap_dir / "test_fmap.json"
         fmap_json.write_text(json.dumps({}))
+        bold = func_dir / "test_bold.nii.gz"
+        bold.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz", "use_bids_uri": True}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is False
+
+    def test_fix_intended_for_works_without_bids_root_when_not_using_uri(
+        self, tmp_path
+    ):
+        """Test that fix_intended_for works without a BIDS root when use_bids_uri is False."""
+        fmap_dir = tmp_path / "fmap"
+        func_dir = tmp_path / "func"
+        fmap_dir.mkdir()
+        func_dir.mkdir()
+        fmap_json = fmap_dir / "test_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+        bold = func_dir / "test_bold.nii.gz"
+        bold.write_text("")
 
         spec = {"target_pattern": "func/*bold.nii.gz"}
         result = fix_intended_for(fmap_json, spec)
 
-        assert result is False
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert data["IntendedFor"] == ["func/test_bold.nii.gz"]
