@@ -16,10 +16,10 @@ def infotodict(seqinfo):
 
     # create functional keys
     bold_mag = create_key(
-        "{bids_subject_session_dir}/func/{bids_subject_session_prefix}_task-rest_run-{item:02d}_bold"
+        "{bids_subject_session_dir}/func/{bids_subject_session_prefix}_task-rest_run-{item:02d}_part-mag_bold"
     )
     bold_phase = create_key(
-        "{bids_subject_session_dir}/func/{bids_subject_session_prefix}_task-rest_run-{item:02d}_phase"
+        "{bids_subject_session_dir}/func/{bids_subject_session_prefix}_task-rest_run-{item:02d}_part-phase_bold"
     )
     bold_sbref = create_key(
         "{bids_subject_session_dir}/func/{bids_subject_session_prefix}_task-rest_run-{item:02d}_sbref"
