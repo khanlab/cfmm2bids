@@ -146,6 +146,13 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
                 if "fillna" in mapping:
                     series = series.fillna(mapping["fillna"])
 
+                # Optional format string to reformat value, e.g. "AA{value}"
+                if "format" in mapping:
+                    fmt = mapping["format"]
+                    series = series.apply(
+                        lambda v, f=fmt: f.format(value=v) if pd.notna(v) else v
+                    )
+
             # Assign to target field
             df_[target] = series
 
