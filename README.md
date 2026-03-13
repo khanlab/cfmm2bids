@@ -175,6 +175,25 @@ metadata_mappings:
 
 When `constant` is specified, it takes precedence over any `source` field, which can be omitted or will be ignored. The constant value is applied to all matching studies.
 
+#### Using Format Strings
+
+You can use the `format` option to reformat the extracted (and sanitized/remapped) value with additional text. Use `{value}` as the placeholder for the current processed value. This is applied after all other processing steps (`premap`, `pattern`, `sanitize`, `map`, `fillna`).
+
+```yaml
+metadata_mappings:
+  subject:
+    source: PatientID
+    pattern: '_([^_]+)$'    # Regex to extract subject ID
+    sanitize: true          # Remove non-alphanumeric characters
+    format: "AA{value}"     # Prepend "AA" to the extracted subject ID
+  session:
+    source: StudyDate
+    sanitize: true
+    format: "{value}T"      # Append "T" to the session value
+```
+
+This is useful when you need to add a prefix, suffix, or otherwise reformat the extracted value. For example, `format: "AA{value}"` would turn `"001"` into `"AA001"`.
+
 ### Filter Configuration (`study_filter_specs`)
 Post-filter studies with include/exclude rules:
 ```yaml

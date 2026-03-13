@@ -245,3 +245,166 @@ class TestMetadataMappingsConstant:
         assert len(result_df) == 2
         assert list(result_df["subject"]) == ["001", "002"]
         assert list(result_df["session"]) == ["20230101", "20230102"]
+
+
+class TestMetadataMappingsFormat:
+    """Test format string functionality in metadata mappings."""
+
+    def test_format_prepend(self, monkeypatch):
+        """Test that format string can prepend text to extracted value."""
+        mock_df = pd.DataFrame(
+            {
+                "PatientID": ["TestPatient001", "TestPatient002"],
+                "StudyDate": ["20230101", "20230102"],
+                "StudyInstanceUID": ["1.2.3.4", "1.2.3.5"],
+            }
+        )
+
+        def mock_query_metadata(return_type=None, **kwargs):
+            return mock_df.copy()
+
+        import workflow.lib.query_filter as qf_module
+
+        monkeypatch.setattr(qf_module, "query_metadata", mock_query_metadata)
+
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "metadata_mappings": {
+                    "subject": {
+                        "source": "PatientID",
+                        "pattern": r"TestPatient([0-9]+)",
+                        "sanitize": True,
+                        "format": "AA{value}",
+                    },
+                    "session": {
+                        "source": "StudyDate",
+                        "sanitize": True,
+                    },
+                },
+            }
+        ]
+
+        result_df = query_dicoms(search_specs)
+
+        assert len(result_df) == 2
+        assert list(result_df["subject"]) == ["AA001", "AA002"]
+        assert list(result_df["session"]) == ["20230101", "20230102"]
+
+    def test_format_append(self, monkeypatch):
+        """Test that format string can append text to extracted value."""
+        mock_df = pd.DataFrame(
+            {
+                "PatientID": ["001", "002"],
+                "StudyDate": ["20230101", "20230102"],
+                "StudyInstanceUID": ["1.2.3.4", "1.2.3.5"],
+            }
+        )
+
+        def mock_query_metadata(return_type=None, **kwargs):
+            return mock_df.copy()
+
+        import workflow.lib.query_filter as qf_module
+
+        monkeypatch.setattr(qf_module, "query_metadata", mock_query_metadata)
+
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "metadata_mappings": {
+                    "subject": {
+                        "source": "PatientID",
+                        "sanitize": True,
+                        "format": "{value}suffix",
+                    },
+                    "session": {
+                        "source": "StudyDate",
+                        "sanitize": True,
+                    },
+                },
+            }
+        ]
+
+        result_df = query_dicoms(search_specs)
+
+        assert len(result_df) == 2
+        assert list(result_df["subject"]) == ["001suffix", "002suffix"]
+
+    def test_format_applied_after_map(self, monkeypatch):
+        """Test that format is applied after map remapping."""
+        mock_df = pd.DataFrame(
+            {
+                "PatientID": ["old001", "old002"],
+                "StudyDate": ["20230101", "20230102"],
+                "StudyInstanceUID": ["1.2.3.4", "1.2.3.5"],
+            }
+        )
+
+        def mock_query_metadata(return_type=None, **kwargs):
+            return mock_df.copy()
+
+        import workflow.lib.query_filter as qf_module
+
+        monkeypatch.setattr(qf_module, "query_metadata", mock_query_metadata)
+
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "metadata_mappings": {
+                    "subject": {
+                        "source": "PatientID",
+                        "sanitize": True,
+                        "map": {"old001": "new001", "old002": "new002"},
+                        "format": "sub{value}",
+                    },
+                    "session": {
+                        "source": "StudyDate",
+                        "sanitize": True,
+                    },
+                },
+            }
+        ]
+
+        result_df = query_dicoms(search_specs)
+
+        assert len(result_df) == 2
+        assert list(result_df["subject"]) == ["subnew001", "subnew002"]
+
+    def test_format_without_pattern(self, monkeypatch):
+        """Test that format works without a pattern."""
+        mock_df = pd.DataFrame(
+            {
+                "PatientID": ["001", "002"],
+                "StudyDate": ["20230101", "20230102"],
+                "StudyInstanceUID": ["1.2.3.4", "1.2.3.5"],
+            }
+        )
+
+        def mock_query_metadata(return_type=None, **kwargs):
+            return mock_df.copy()
+
+        import workflow.lib.query_filter as qf_module
+
+        monkeypatch.setattr(qf_module, "query_metadata", mock_query_metadata)
+
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "metadata_mappings": {
+                    "subject": {
+                        "source": "PatientID",
+                        "sanitize": False,
+                        "format": "prefix{value}suffix",
+                    },
+                    "session": {
+                        "source": "StudyDate",
+                        "sanitize": True,
+                    },
+                },
+            }
+        ]
+
+        result_df = query_dicoms(search_specs)
+
+        assert len(result_df) == 2
+        assert list(result_df["subject"]) == ["prefix001suffix", "prefix002suffix"]
