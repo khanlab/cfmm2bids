@@ -42,6 +42,12 @@ if use_gradcorrect and not gradcorrect_config.get("grad_coeff_file"):
 # Stage used for final assembly - gradcorr if enabled, otherwise fix
 stage_for_assembly = stage_gradcorr if use_gradcorrect else stage_fix
 
+# Uncorrected BIDS settings (only relevant when gradcorrect is enabled)
+create_bids_uncorr = use_gradcorrect and gradcorrect_config.get(
+    "create_bids_uncorr", False
+)
+final_bids_uncorr_dir = Path(config.get("final_bids_uncorr_dir", "bids_uncorr"))
+
 # ----------
 # 0 - query
 # ----------
@@ -120,6 +126,22 @@ sessions = df[["subject", "session"]].drop_duplicates().session
 # Get unique UIDs for download cache
 unique_uids = df["StudyInstanceUID"].unique().tolist()
 
+# Collect uncorrected BIDS targets when gradcorrect + create_bids_uncorr are both enabled
+_bids_uncorr_targets = (
+    [
+        *expand(
+            final_bids_uncorr_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        final_bids_uncorr_dir / "dataset_description.json",
+        final_bids_uncorr_dir / ".bidsignore",
+    ]
+    if create_bids_uncorr
+    else []
+)
+
 
 rule all:
     input:
@@ -133,6 +155,7 @@ rule all:
         final_bids_dir / ".bidsignore",
         stage_convert / "qc/aggregate_report.html",
         stage_fix / "qc/aggregate_report.html",
+        _bids_uncorr_targets,
 
 
 rule download:
@@ -691,6 +714,53 @@ rule copy_final_bids_top_level_files:
     localrule: True
     log:
         "logs/assemble_final_bids/copy_{filename}.log",
+    shell:
+        "cp {input.src_file} {output.dst_file} &> {log}"
+
+
+rule assemble_final_bids_uncorr:
+    """
+    Assemble the uncorrected BIDS dataset from the fix stage.
+    Only used when gradcorrect is enabled and create_bids_uncorr is true in the config.
+    This provides the raw (non-resampled) data alongside the gradient-corrected dataset,
+    which is useful because the gradcorrect BIDS dataset has been resampled and may be
+    missing certain series (e.g. any series with online distortion correction are dropped).
+    """
+    input:
+        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        bids_subj_dir=stage_fix / "bids-staging/sub-{subject}/ses-{session}",
+    output:
+        bids_subj_dir=directory(final_bids_uncorr_dir / "sub-{subject}/ses-{session}"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=5,
+    localrule: True
+    log:
+        "logs/assemble_final_bids_uncorr/sub-{subject}_ses-{session}.log",
+    shell:
+        "cp -RL {input.bids_subj_dir} {output.bids_subj_dir} &> {log}"
+
+
+rule copy_final_bids_uncorr_top_level_files:
+    """
+    Copy top-level BIDS files (dataset_description.json, .bidsignore) to the uncorrected
+    BIDS directory. Only used when gradcorrect is enabled and create_bids_uncorr is true.
+    """
+    input:
+        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        src_file=stage_fix / "bids-staging/{filename}",
+    output:
+        dst_file=final_bids_uncorr_dir / "{filename}",
+    wildcard_constraints:
+        filename="dataset_description.json|.bidsignore",
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=1,
+    localrule: True
+    log:
+        "logs/assemble_final_bids_uncorr/copy_{filename}.log",
     shell:
         "cp {input.src_file} {output.dst_file} &> {log}"
 
