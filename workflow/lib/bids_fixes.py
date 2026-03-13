@@ -90,9 +90,9 @@ def fix_intended_for(path: Path, spec: dict) -> bool:
 
     Searches for NIfTI files matching ``target_pattern`` within the same
     session directory as the fieldmap JSON and sets the ``IntendedFor``
-    field.  By default paths are written relative to the session directory
-    (e.g. ``"func/sub-01_ses-pre_task-rest_bold.nii.gz"``), which is the
-    format expected by most BIDS apps (including fMRIPrep).  Set
+    field.  By default paths are written relative to the subject directory
+    (e.g. ``"ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"``), which is
+    the format expected by most BIDS apps (including fMRIPrep).  Set
     ``use_bids_uri: true`` in the spec to use the ``bids::`` URI format
     instead.
 
@@ -141,8 +141,10 @@ def fix_intended_for(path: Path, spec: dict) -> bool:
             f"bids::{p.relative_to(bids_root).as_posix()}" for p in target_paths
         ]
     else:
-        # Paths relative to the session directory (fMRIPrep-compatible format).
-        intended_for = [p.relative_to(session_dir).as_posix() for p in target_paths]
+        # Paths relative to the subject directory (fMRIPrep-compatible format),
+        # e.g. "ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz".
+        subject_dir = session_dir.parent
+        intended_for = [p.relative_to(subject_dir).as_posix() for p in target_paths]
 
     with open(path) as f:
         data = json.load(f)

@@ -612,7 +612,7 @@ class TestFixIntendedFor:
         return bids_root, fmap_dir, func_dir
 
     def test_fix_intended_for_sets_intended_for(self, tmp_path):
-        """Test that fix_intended_for sets IntendedFor with session-relative paths by default."""
+        """Test that fix_intended_for sets IntendedFor with subject-relative paths by default."""
         bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
 
         fmap_json = fmap_dir / "sub-01_ses-pre_acq-pe_epi.json"
@@ -631,8 +631,8 @@ class TestFixIntendedFor:
             data = json.load(f)
         assert "IntendedFor" in data
         assert sorted(data["IntendedFor"]) == [
-            "func/sub-01_ses-pre_task-motor_run-1_bold.nii.gz",
-            "func/sub-01_ses-pre_task-motor_run-2_bold.nii.gz",
+            "ses-pre/func/sub-01_ses-pre_task-motor_run-1_bold.nii.gz",
+            "ses-pre/func/sub-01_ses-pre_task-motor_run-2_bold.nii.gz",
         ]
 
     def test_fix_intended_for_sets_intended_for_bids_uri(self, tmp_path):
@@ -674,7 +674,9 @@ class TestFixIntendedFor:
 
         with open(fmap_json) as f:
             data = json.load(f)
-        assert data["IntendedFor"] == ["func/sub-01_ses-pre_task-rest_bold.nii.gz"]
+        assert data["IntendedFor"] == [
+            "ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"
+        ]
 
     def test_fix_intended_for_returns_false_for_non_json(self, tmp_path):
         """Test that fix_intended_for returns False for non-JSON files."""
@@ -731,10 +733,14 @@ class TestFixIntendedFor:
         self, tmp_path
     ):
         """Test that fix_intended_for works without a BIDS root when use_bids_uri is False."""
-        fmap_dir = tmp_path / "fmap"
-        func_dir = tmp_path / "func"
-        fmap_dir.mkdir()
-        func_dir.mkdir()
+        # Use a two-level structure (subject/session/modality) without sub-/ses- prefixes
+        # so there is no BIDS root detectable, but the depth matches BIDS convention.
+        subject_dir = tmp_path / "subject"
+        session_dir = subject_dir / "session"
+        fmap_dir = session_dir / "fmap"
+        func_dir = session_dir / "func"
+        fmap_dir.mkdir(parents=True)
+        func_dir.mkdir(parents=True)
         fmap_json = fmap_dir / "test_fmap.json"
         fmap_json.write_text(json.dumps({}))
         bold = func_dir / "test_bold.nii.gz"
@@ -746,4 +752,4 @@ class TestFixIntendedFor:
         assert result is True
         with open(fmap_json) as f:
             data = json.load(f)
-        assert data["IntendedFor"] == ["func/test_bold.nii.gz"]
+        assert data["IntendedFor"] == ["session/func/test_bold.nii.gz"]
