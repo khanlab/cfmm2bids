@@ -77,6 +77,7 @@ Applies post-conversion fixes to the BIDS dataset. Available fix actions:
 - **remove**: Remove files matching a pattern (e.g., unwanted fieldmaps)
 - **update_json**: Update JSON sidecar metadata (e.g., add PhaseEncodingDirection)
 - **fix_orientation**: Reorient NIfTI files to canonical RAS+ orientation
+- **gen_mp2rage_uni_den**: Generate a noise-robust MP2RAGE UNI-DEN T1w image from UNI, INV1, and INV2
 
 Outputs:
 - `bids-staging/sub-*/ses-*/` - Intermediate fixed BIDS data per subject/session
@@ -291,6 +292,12 @@ post_convert_fixes:
   - name: reorient_nifti
     pattern: "anat/*T1w.nii.gz"
     action: fix_orientation
+
+  - name: gen_mp2rage_uni_den
+    pattern: "anat/*_acq-UNI_*MP2RAGE.nii.gz"
+    action: gen_mp2rage_uni_den
+    multiplying_factor: 6   # optional, default 6 (range 1-10)
+    output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename
 ```
 
 ### Other Options

@@ -8,11 +8,13 @@ import numpy as np
 from workflow.lib.bids_fixes import (
     FIX_REGISTRY,
     _axcodes2aff,
+    _compute_mp2rage_uni_den,
     _compute_nifti_hash,
     _find_bids_root,
     describe_available_fixes,
     fix_intended_for,
     fix_orientation_quadruped,
+    gen_mp2rage_uni_den,
     register_fix,
     remove_duplicate_niftis,
     remove_file,
@@ -79,6 +81,7 @@ class TestRegisterFix:
         assert "fix_orientation_quadruped" in FIX_REGISTRY
         assert "remove_duplicate_niftis" in FIX_REGISTRY
         assert "split_multiecho_nifti" in FIX_REGISTRY
+        assert "gen_mp2rage_uni_den" in FIX_REGISTRY
 
 
 class TestRemoveFile:
@@ -753,3 +756,213 @@ class TestFixIntendedFor:
         with open(fmap_json) as f:
             data = json.load(f)
         assert data["IntendedFor"] == ["session/func/test_bold.nii.gz"]
+
+
+class TestGenMp2rageUniDen:
+    """Tests for the gen_mp2rage_uni_den fix function."""
+
+    def _make_mp2rage_set(self, tmp_path, base="sub-01_ses-01", run="run-01"):
+        """Create a minimal set of synthetic MP2RAGE NIfTI files (UNI, INV1, INV2).
+
+        Returns a dict with keys 'uni', 'inv1', 'inv2', and the expected output
+        paths 'new_t1w' and 'existing_t1w'.
+        """
+        anat_dir = tmp_path / "anat"
+        anat_dir.mkdir(parents=True, exist_ok=True)
+
+        shape = (10, 10, 10)
+        affine = np.eye(4)
+
+        # UNI: integer-format values in [0, 4095]
+        uni_data = np.random.randint(0, 4096, shape).astype(np.float32)
+        uni_img = nib.Nifti1Image(uni_data, affine)
+
+        # INV1 / INV2: arbitrary positive values
+        inv1_data = np.abs(np.random.randn(*shape)).astype(np.float32) + 1.0
+        inv2_data = np.abs(np.random.randn(*shape)).astype(np.float32) + 2.0
+        inv1_img = nib.Nifti1Image(inv1_data, affine)
+        inv2_img = nib.Nifti1Image(inv2_data, affine)
+
+        file_end = f"_{run}_MP2RAGE.nii.gz" if run else "_MP2RAGE.nii.gz"
+        entity = f"_{run}" if run else ""
+
+        uni_path = anat_dir / f"{base}_acq-UNI{file_end}"
+        inv1_path = anat_dir / f"{base}_inv-1{file_end}"
+        inv2_path = anat_dir / f"{base}_inv-2{file_end}"
+        existing_t1w = anat_dir / f"{base}_acq-MP2RAGE{entity}_T1w.nii.gz"
+        new_t1w = anat_dir / f"{base}_acq-MP2RAGEpostproc{entity}_T1w.nii.gz"
+
+        nib.save(uni_img, uni_path)
+        nib.save(inv1_img, inv1_path)
+        nib.save(inv2_img, inv2_path)
+
+        return {
+            "uni": uni_path,
+            "inv1": inv1_path,
+            "inv2": inv2_path,
+            "new_t1w": new_t1w,
+            "existing_t1w": existing_t1w,
+            "anat_dir": anat_dir,
+        }
+
+    # ------------------------------------------------------------------
+    # Basic success path
+    # ------------------------------------------------------------------
+
+    def test_gen_mp2rage_uni_den_creates_t1w(self, tmp_path):
+        """Test that gen_mp2rage_uni_den creates the T1w output file."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is True
+        assert paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_output_is_nifti(self, tmp_path):
+        """Test that the generated T1w output is a valid NIfTI file."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        gen_mp2rage_uni_den(paths["uni"], {})
+
+        img = nib.load(paths["new_t1w"])
+        assert img.shape == (10, 10, 10)
+
+    def test_gen_mp2rage_uni_den_output_dtype_int16(self, tmp_path):
+        """Test that the generated image uses int16 data type."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        gen_mp2rage_uni_den(paths["uni"], {})
+
+        img = nib.load(paths["new_t1w"])
+        assert np.issubdtype(img.get_data_dtype(), np.integer)
+
+    def test_gen_mp2rage_uni_den_copies_json_sidecar(self, tmp_path):
+        """Test that the UNI JSON sidecar is copied alongside the T1w output."""
+        paths = self._make_mp2rage_set(tmp_path)
+        uni_json = paths["uni"].with_suffix("").with_suffix(".json")
+        uni_json.write_text('{"ScanningSequence": "MP2RAGE"}')
+
+        gen_mp2rage_uni_den(paths["uni"], {})
+
+        expected_json = paths["new_t1w"].with_suffix("").with_suffix(".json")
+        assert expected_json.exists()
+        with open(expected_json) as f:
+            data = json.load(f)
+        assert data["ScanningSequence"] == "MP2RAGE"
+
+    # ------------------------------------------------------------------
+    # Custom spec options
+    # ------------------------------------------------------------------
+
+    def test_gen_mp2rage_uni_den_custom_output_acq(self, tmp_path):
+        """Test that output_acq spec field controls the acq- entity."""
+        paths = self._make_mp2rage_set(tmp_path)
+        custom_t1w = (
+            paths["anat_dir"] / "sub-01_ses-01_acq-MyCustomAcq_run-01_T1w.nii.gz"
+        )
+
+        result = gen_mp2rage_uni_den(paths["uni"], {"output_acq": "MyCustomAcq"})
+
+        assert result is True
+        assert custom_t1w.exists()
+
+    def test_gen_mp2rage_uni_den_custom_multiplying_factor(self, tmp_path):
+        """Test that multiplying_factor spec field is accepted without error."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        result = gen_mp2rage_uni_den(paths["uni"], {"multiplying_factor": 10})
+
+        assert result is True
+        assert paths["new_t1w"].exists()
+
+    # ------------------------------------------------------------------
+    # Skip / guard conditions
+    # ------------------------------------------------------------------
+
+    def test_gen_mp2rage_uni_den_skips_when_existing_t1w_present(self, tmp_path):
+        """Test that the fix is skipped when a scanner T1w (acq-MP2RAGE) already exists."""
+        paths = self._make_mp2rage_set(tmp_path)
+        # Create the scanner-produced T1w
+        paths["existing_t1w"].write_bytes(b"")
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+        assert not paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_skips_when_output_already_exists(self, tmp_path):
+        """Test that the fix is skipped when the output T1w already exists."""
+        paths = self._make_mp2rage_set(tmp_path)
+        paths["new_t1w"].write_bytes(b"")
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+
+    def test_gen_mp2rage_uni_den_skips_when_inv1_missing(self, tmp_path):
+        """Test that the fix returns False when INV1 is not present."""
+        paths = self._make_mp2rage_set(tmp_path)
+        paths["inv1"].unlink()
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+        assert not paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_skips_when_inv2_missing(self, tmp_path):
+        """Test that the fix returns False when INV2 is not present."""
+        paths = self._make_mp2rage_set(tmp_path)
+        paths["inv2"].unlink()
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+        assert not paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_returns_false_for_non_nifti(self, tmp_path):
+        """Test that the fix returns False for non-NIfTI files."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("not a nifti")
+
+        result = gen_mp2rage_uni_den(txt_file, {})
+
+        assert result is False
+
+    def test_gen_mp2rage_uni_den_returns_false_when_acq_marker_missing(self, tmp_path):
+        """Test that the fix returns False when _acq-UNI_ is not in the filename."""
+        anat_dir = tmp_path / "anat"
+        anat_dir.mkdir()
+        nii = anat_dir / "sub-01_ses-01_MP2RAGE.nii.gz"
+        nib.save(nib.Nifti1Image(np.zeros((5, 5, 5)), np.eye(4)), nii)
+
+        result = gen_mp2rage_uni_den(nii, {})
+
+        assert result is False
+
+    def test_gen_mp2rage_uni_den_returns_false_when_mp2rage_suffix_missing(
+        self, tmp_path
+    ):
+        """Test that the fix returns False when _MP2RAGE is missing from the filename."""
+        anat_dir = tmp_path / "anat"
+        anat_dir.mkdir()
+        nii = anat_dir / "sub-01_ses-01_acq-UNI_run-01_bold.nii.gz"
+        nib.save(nib.Nifti1Image(np.zeros((5, 5, 5)), np.eye(4)), nii)
+
+        result = gen_mp2rage_uni_den(nii, {})
+
+        assert result is False
+
+    # ------------------------------------------------------------------
+    # _compute_mp2rage_uni_den helper
+    # ------------------------------------------------------------------
+
+    def test_compute_mp2rage_uni_den_produces_output_file(self, tmp_path):
+        """Test that _compute_mp2rage_uni_den writes a NIfTI to output_path."""
+        paths = self._make_mp2rage_set(tmp_path)
+        out = tmp_path / "output.nii.gz"
+
+        _compute_mp2rage_uni_den(paths["uni"], paths["inv1"], paths["inv2"], out)
+
+        assert out.exists()
+        img = nib.load(out)
+        assert img.shape == (10, 10, 10)
