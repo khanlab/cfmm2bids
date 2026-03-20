@@ -132,10 +132,27 @@ post_convert_fixes:
     pattern: "*/*run-*_*MP2RAGE.nii.gz"
     action: remove_duplicate_niftis
 
-  - name: fmap_intended_for
-    pattern: "fmap/*phasediff.json"
-    action: intended_for
-    target_pattern: "func/*bold.nii.gz"
+  - name: remove_unneeded_fmap_phasediff
+    pattern: "fmap/*phasediff.*"
+    action: remove
+
+  - name: remove_unneeded_fmap_magnitude
+    pattern: "fmap/*magnitude[12].*"
+    action: remove
+
+  - name: pepolar_fmap
+    pattern: "fmap/*epi.json"
+    action: update_json
+    updates:
+      B0FieldIdentifier": "pepolar_rest"
+
+  - name: pepolar_bold
+    pattern: "func/*bold.json"
+    action: update_json
+    updates:
+      B0FieldSource": "pepolar_rest"
+
+
 
 
 # ============================================================================
