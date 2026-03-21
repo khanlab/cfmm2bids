@@ -144,13 +144,13 @@ post_convert_fixes:
     pattern: "fmap/*epi.json"
     action: update_json
     updates:
-      B0FieldIdentifier": "pepolar_rest"
+      B0FieldIdentifier: pepolar_rest
 
   - name: pepolar_bold
     pattern: "func/*bold.json"
     action: update_json
     updates:
-      B0FieldSource": "pepolar_rest"
+      B0FieldSource: pepolar_rest
 
 
 
