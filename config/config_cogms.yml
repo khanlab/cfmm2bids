@@ -67,6 +67,8 @@ study_filter_specs:
   exclude_post_remap:
     - subject == '103' and session =='6m' #no dicoms error
     - subject == '104' and session =='baseline' #no dicoms error
+    - subject == '120' and session =='42m' #no dicoms error
+    - subject == '402' and session =='baseline' #no dicoms error
 
        
 

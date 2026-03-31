@@ -47,14 +47,14 @@ def infotodict(seqinfo):
     for _idx, s in enumerate(seqinfo):
         # bold
         if "bold" in s.protocol_name:
-            if "_PA_" in s.series_description:
+            if "_PA" in s.series_description:
                 if s.dim4 > 2 and ("M" in s.image_type[2].strip()):
                     info[bold_mag_pa].append({"item": s.series_id})
                 if s.dim4 > 2 and ("P" in s.image_type[2].strip()):
                     info[bold_phase_pa].append({"item": s.series_id})
                 if s.dim4 <= 2 and "SBRef" in (s.series_description).strip():
                     info[bold_sbref_pa].append({"item": s.series_id})
-            elif "_AP_" in s.series_description:
+            elif "_AP" in s.series_description:
                 if s.dim4 > 2 and ("M" in s.image_type[2].strip()):
                     info[bold_mag_ap].append({"item": s.series_id})
                 if s.dim4 > 2 and ("P" in s.image_type[2].strip()):
