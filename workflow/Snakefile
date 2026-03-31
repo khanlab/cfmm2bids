@@ -751,8 +751,8 @@ if "spim" in config:
             "logs/link_spim/sub-{subject}_ses-{session}.log",
         shell:
             "mkdir -p {output.bids_subj_dir}/micr && "
-            "ln -s {input.spim_zarr} {params.out_zarr} && "
-            "ln -s {input.spim_json} {params.out_json} "
+            "ln -srf {input.spim_zarr} {params.out_zarr} && "
+            "ln -srf {input.spim_json} {params.out_json} "
 
     rule all_spim:
         input:
