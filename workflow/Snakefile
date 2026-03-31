@@ -146,7 +146,7 @@ _bids_uncorr_targets = (
 # SPIM linkages
 
 spim_targets = []
-if "spim" in config and config.get('link_to_spim',False):
+if "spim" in config and config.get("link_to_spim", False):
 
     import string as _string
 
@@ -210,7 +210,7 @@ rule all:
         stage_convert / "qc/aggregate_report.html",
         stage_fix / "qc/aggregate_report.html",
         _bids_uncorr_targets,
-        spim_targets
+        spim_targets,
 
 
 rule download:
@@ -847,41 +847,40 @@ rule clean:
         "scripts/clean_final_bids.py"
 
 
-ruleorder: link_spim > assemble_final_bids
+if "spim" in config and config.get("link_to_spim", False):
 
-rule link_spim:
-    input:
-        spim_zarr=lambda wildcards: config["spim"][wildcards.session]["inputs"][
-            "ome_zarr"
-        ].path,
-        spim_json=lambda wildcards: config["spim"][wildcards.session]["inputs"][
-            "json"
-        ].path,
-    params:
-        out_zarr=lambda wildcards, output: Path(output.bids_subj_dir)
-        / (
-            config["spim"][wildcards.session]["out_path"].format(**wildcards)
-            + ".ome.zarr"
-        ),
-        out_json=lambda wildcards, output: Path(output.bids_subj_dir)
-        / (
-            config["spim"][wildcards.session]["out_path"].format(**wildcards)
-            + ".json"
-        ),
-    output:
-        bids_subj_dir=directory(final_bids_dir / "sub-{subject}" / "ses-{session}"),
-    wildcard_constraints:
-        session="|".join(config["spim"].keys())
-    threads: 1
-    resources:
-        mem_mb=4000,
-        runtime=1,
-    log:
-        "logs/link_spim/sub-{subject}_ses-{session}.log",
-    shell:
-        "mkdir -p {output.bids_subj_dir}/micr && "
-        "ln -s {input.spim_zarr} {params.out_zarr} && "
-        "ln -s {input.spim_json} {params.out_json} "
+    ruleorder: link_spim > assemble_final_bids
 
-
-
+    rule link_spim:
+        input:
+            spim_zarr=lambda wildcards: config["spim"][wildcards.session]["inputs"][
+                "ome_zarr"
+            ].path,
+            spim_json=lambda wildcards: config["spim"][wildcards.session]["inputs"][
+                "json"
+            ].path,
+        params:
+            out_zarr=lambda wildcards, output: Path(output.bids_subj_dir)
+            / (
+                config["spim"][wildcards.session]["out_path"].format(**wildcards)
+                + ".ome.zarr"
+            ),
+            out_json=lambda wildcards, output: Path(output.bids_subj_dir)
+            / (
+                config["spim"][wildcards.session]["out_path"].format(**wildcards)
+                + ".json"
+            ),
+        output:
+            bids_subj_dir=directory(final_bids_dir / "sub-{subject}" / "ses-{session}"),
+        wildcard_constraints:
+            session="|".join(config["spim"].keys()),
+        threads: 1
+        resources:
+            mem_mb=4000,
+            runtime=1,
+        log:
+            "logs/link_spim/sub-{subject}_ses-{session}.log",
+        shell:
+            "mkdir -p {output.bids_subj_dir}/micr && "
+            "ln -s {input.spim_zarr} {params.out_zarr} && "
+            "ln -s {input.spim_json} {params.out_json} "
