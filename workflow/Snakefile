@@ -796,11 +796,29 @@ if "spim" in config:
 
     ruleorder: link_spim > assemble_final_bids
 
+    import string as _string
+
     from snakebids import generate_inputs
 
     spim_targets = []
 
     for ses, cfg in config["spim"].items():
+        # Validate out_path only uses {subject} and {session} wildcards,
+        # since those are the only wildcards available in the link_spim rule.
+        _allowed_wildcards = {"subject", "session"}
+        _used_wildcards = {
+            field_name
+            for _, field_name, _, _ in _string.Formatter().parse(cfg["out_path"])
+            if field_name is not None
+        }
+        _unknown = _used_wildcards - _allowed_wildcards
+        if _unknown:
+            raise ValueError(
+                f"SPIM config for session '{ses}': out_path '{cfg['out_path']}' "
+                f"contains unsupported wildcards: {_unknown}. "
+                f"Only 'subject' and 'session' are available."
+            )
+
         config["spim"][ses]["inputs"] = generate_inputs(
             bids_dir=cfg["bids_dir"], pybids_inputs=cfg["pybids_inputs"]
         )
