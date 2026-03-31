@@ -111,7 +111,8 @@ stages:
 download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
 
 
-
+# EXTRA: Link to SPIM microscopy datasets
+link_to_spim: True
 
 #lightsheet bids data to link to
 #  indexed by session number, so different batches can use different sessions
@@ -119,6 +120,46 @@ spim:
   exvivo14m1:
     out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
     bids_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/bids
+    pybids_inputs:
+      ome_zarr:
+        filters:
+          suffix: 'SPIM'
+          extension: 'ome.zarr'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+      json:
+        filters:
+          suffix: 'SPIM'
+          extension: 'json'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+  exvivo14m2:
+    out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
+    bids_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch2/bids
+    pybids_inputs:
+      ome_zarr:
+        filters:
+          suffix: 'SPIM'
+          extension: 'ome.zarr'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+      json:
+        filters:
+          suffix: 'SPIM'
+          extension: 'json'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+  exvivo14m3:
+    out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
+    bids_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch3/bids
     pybids_inputs:
       ome_zarr:
         filters:
