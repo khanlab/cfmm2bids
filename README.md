@@ -14,7 +14,7 @@ A Snakemake workflow for converting CFMM DICOM data to BIDS format using heudico
 
 ## Workflow Stages
 
-The workflow is organized into 5 main processing stages plus a final copy stage, each producing intermediate outputs:
+The workflow is organized into 5 main processing stages (plus an optional gradcorrect stage) and a final copy stage, each producing intermediate outputs:
 
 **Note on BIDS staging:** The convert and fix stages use a two-step assembly process:
 1. Individual subject/session data is first written to `bids-staging/sub-*/ses-*/` directories
@@ -85,8 +85,32 @@ Outputs:
 - `qc/bids_validator.json` - Post-fix BIDS validation results
 - `qc/aggregate_report.html` - Aggregate QC report including fix provenance
 
-### 6. Final Stage (`bids/`)
+### 6. Gradcorrect Stage (`results/5_gradcorr`) (optional)
+Applies gradient nonlinearity correction using the [gradcorrect BIDS app](https://github.com/khanlab/gradcorrect).
+Enabled via the `gradcorrect.enable: true` config option. Requires Singularity/Apptainer and a
+gradient coefficient file (`gradcorrect.grad_coeff_file`).
+
+When enabled, the corrected per-subject/session directories replace the fix-stage directories
+as input for the final BIDS assembly.
+
+Outputs:
+- `bids-staging/sub-*/ses-*/` - Gradient-corrected BIDS data per subject/session
+
+#### Uncorrected BIDS dataset (optional)
+When gradcorrect is enabled, you can also request that the uncorrected (fix-stage) BIDS dataset
+be assembled alongside the gradient-corrected one by setting `gradcorrect.create_bids_uncorr: true`.
+This is useful because:
+- The gradient-corrected dataset has been resampled, so the raw data may be needed for some analyses.
+- Some series are dropped by gradcorrect (e.g. series with online distortion correction applied by
+  the scanner), and these will still be present in the uncorrected dataset.
+
+The uncorrected dataset is written to `final_bids_uncorr_dir` (default: `bids_uncorr`).
+
+### 7. Final Stage (`bids/`)
 Copies the validated and fixed BIDS dataset to the final output directory.
+When gradcorrect is enabled, gradient-corrected data is used. If `gradcorrect.create_bids_uncorr`
+is also enabled, the uncorrected data is additionally copied to `bids_uncorr/` (or the path set
+by `final_bids_uncorr_dir`).
 
 Note: the workflow will not automatically clean-up subjects/sessions in the final output folder. To do this explicitly, run with the `--forcerun clean`, or `-R clean` option.
 
@@ -163,6 +187,25 @@ metadata_mappings:
 ```
 
 When `constant` is specified, it takes precedence over any `source` field, which can be omitted or will be ignored. The constant value is applied to all matching studies.
+
+#### Using Format Strings
+
+You can use the `format` option to reformat the extracted (and sanitized/remapped) value with additional text. Use `{value}` as the placeholder for the current processed value. This is applied after all other processing steps (`premap`, `pattern`, `sanitize`, `map`, `fillna`).
+
+```yaml
+metadata_mappings:
+  subject:
+    source: PatientID
+    pattern: '_([^_]+)$'    # Regex to extract subject ID
+    sanitize: true          # Remove non-alphanumeric characters
+    format: "AA{value}"     # Prepend "AA" to the extracted subject ID
+  session:
+    source: StudyDate
+    sanitize: true
+    format: "{value}T"      # Append "T" to the session value
+```
+
+This is useful when you need to add a prefix, suffix, or otherwise reformat the extracted value. For example, `format: "AA{value}"` would turn `"001"` into `"AA001"`.
 
 ### Filter Configuration (`study_filter_specs`)
 Post-filter studies with include/exclude rules:

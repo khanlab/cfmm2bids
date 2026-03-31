@@ -1,6 +1,9 @@
 credentials_file: ~/.uwo_credentials.bd
-final_bids_dir: "/nfs/scratch/aakbar9/cfmm2bids/bids"
+final_bids_dir: "/nfs/scratch/akhan488/cogms-cfmm2bids/bids_gradcorr"
 
+final_bids_uncorr_dir: "/nfs/scratch/akhan488/cogms-cfmm2bids/bids_nogradcorr"
+
+#
 # 1. query
 search_specs:
   - dicom_query:
@@ -122,13 +125,19 @@ post_convert_fixes:
     pattern: "*/*part-phase*.json"
     action: update_json
     updates:
-      Units: rad
+      Units: rad/s
 
   - name: phase_units_
     pattern: "*/*phase.json"
     action: update_json
     updates:
-      Units: rad
+      Units: rad/s
+
+  - name: phasediff_units
+    pattern: "fmap/*phasediff.json"
+    action: update_json
+    updates:
+      Units: rad/s
 
   - name: remove_dupe_t1maps
     pattern: "*/*run-*_*T1map.nii.gz"
@@ -141,6 +150,32 @@ post_convert_fixes:
   - name: remove_dupe_mp2rage
     pattern: "*/*run-*_*MP2RAGE.nii.gz"
     action: remove_duplicate_niftis
+
+  - name: fmap_intended_for
+    pattern: "fmap/*phasediff.json"
+    action: intended_for
+    target_pattern: "func/*bold.nii.gz"
+
+
+# ============================================================================
+# 6. GRADCORRECT STAGE - Gradient nonlinearity correction (OPTIONAL)
+# ============================================================================
+# Apply gradient nonlinearity correction using the gradcorrect BIDS app.
+# When enabled, this stage runs after the fix stage and the corrected
+# subject/session directories are used for the final BIDS assembly.
+# Requires Singularity/Apptainer to run the container; pass
+# --use-singularity (or --use-apptainer) to Snakemake when running.
+
+gradcorrect:
+  # Enable gradient nonlinearity correction (OPTIONAL, default: false)
+  enable: true
+
+  # Path to gradient coefficient file (REQUIRED when enable is true;
+  # the workflow will raise an error at startup if this is missing)
+  grad_coeff_file: "/nfs/khan/software/gradcorrect/coeff_AC84.grad"
+
+
+  create_bids_uncorr: true
 
 
 bidsignore:
@@ -155,5 +190,5 @@ stages:
   query: "results/0_query"
   filter: "results/1_filter"
   download: "/nfs/scratch/akhan488/cogms-cfmm2bids/results/2_download"
-  convert: "/nfs/scratch/aakbar9/cfmm2bids/results/3_convert"
-  fix: "/nfs/scratch/aakbar9/cfmm2bids/results/4_fix"
+  convert: "/nfs/scratch/akhan488/cogms-cfmm2bids/results/3_convert"
+  fix: "/nfs/scratch/akhan488/cogms-cfmm2bids/results/4_fix"

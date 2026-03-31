@@ -1,36 +1,35 @@
 # general 
 credentials_file: ~/.uwo_credentials.bd
-final_bids_dir: "/nfs/trident3/mri/prado/ki3/bids"
+final_bids_dir: "/nfs/trident3/mri/prado/mouse_app_mapt_apoe/bids"
 
 # 1. query
 search_specs:
   - dicom_query:
-      study_description:  "Prado^AD-BV-LEQ"
-      study_date: 20250405-
+      study_description:  "Schmitz^MouseAD"
+      study_date: 
     metadata_mappings:
       subject:
         source: PatientName
-        pattern: '(AS[a-z0-9A-Z]+)$'
+        pattern: 'APOE\*?[34]-([0-9\-]+[MF]#[0-9]+)$'
         sanitize: true
         # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
-
+        format: AA{value}
       session:
         source: StudyDate
         # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
-  
- 
+
  
 query_kwargs:
   additional_tags:
-#    "00100030": PatientBirthDate
- 
- 
+ #   "00100030": PatientBirthDate
+  
 
 
 # 2. filter
 study_filter_specs:
   include:
   exclude:
+    - "subject != subject"                  # Exclude if subject is NaN
   remap_sessions_by_date:
     # Enable/disable session remapping (REQUIRED if section is present)
     enable: true
@@ -58,8 +57,7 @@ study_filter_specs:
     # If not specified, generates labels like '0m', '6m', '12m' automatically
     # Custom mapping example (e.g., for time since baseline):
     time_to_label:
-      0: '11m' 
-      3: '14m'
+      0: '12m'
  
 # 3. download
 cfmm2tar_download_options: '--skip-derived'
@@ -69,7 +67,7 @@ merge_duplicate_studies: False
 
 # 4. convert
 heudiconv_options: '--minmeta --use-enhanced-dicom --no-sanitize-jsons'
-heuristic: heuristics/ki3_15T.py
+heuristic: heuristics/Schmitz^MouseAD_heuristic.py
 dcmconfig_json: resources/dcm2niix_config.json
 
 
@@ -86,53 +84,19 @@ post_convert_fixes:
     pattern: "*/*.nii.gz"
     action: fix_orientation_quadruped
 
-  - name: split_multiecho_t2starw
-    pattern: "anat/*T2starw.nii.gz"
-    action: split_multiecho_nifti
-    
-  - name: remove_scans_tsv
-    pattern: "*scans.tsv"
-    action: remove
-
-
 
 #intermediate output folders
 stages:
-  query: "results/ki3/0_query"
-  filter: "results/ki3/1_filter"
-  download: "results/ki3/2_download"
-  convert: "results/ki3/3_convert"
-  fix: "results/ki3/4_fix"
+  query: "results/mouse_app_mapt_apoe/0_query"
+  filter: "results/mouse_app_mapt_apoe/1_filter"
+  download: "results/mouse_app_mapt_apoe/2_download"
+  convert: "results/mouse_app_mapt_apoe/3_convert"
+  fix: "results/mouse_app_mapt_apoe/4_fix"
 
+ 
 # Centralized download cache 
 # Downloads are cached by StudyInstanceUID to avoid re-downloading
 # the same data when subject/session mappings differ
 # Default: "results/download_cache"
 download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
 
-
-
-
-#lightsheet bids data to link to
-#  indexed by session number, so different batches can use different sessions
-spim:
-  exvivo14m1:
-    out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
-    bids_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_ki3_batch1/bids
-    pybids_inputs:
-      ome_zarr:
-        filters:
-          suffix: 'SPIM'
-          extension: 'ome.zarr'
-          sample: brain
-          acquisition: 'imaris4x'
-        wildcards:
-          - subject
-      json:
-        filters:
-          suffix: 'SPIM'
-          extension: 'json'
-          sample: brain
-          acquisition: 'imaris4x'
-        wildcards:
-          - subject

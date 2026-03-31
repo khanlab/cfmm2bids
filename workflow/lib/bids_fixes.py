@@ -9,6 +9,8 @@ They are auto-registered via the @register_fix decorator.
 import hashlib
 import json
 import logging
+import re
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -63,6 +65,90 @@ def update_json(path: Path, spec: dict) -> bool:
     with open(path) as f:
         data = json.load(f)
     data.update(updates)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    return True
+
+
+def _find_bids_root(path: Path) -> Path | None:
+    """Find the BIDS dataset root from a path inside the dataset.
+
+    Traverses parent directories until a ``sub-*`` directory is found,
+    then returns its parent (the BIDS root).  Returns ``None`` when no
+    such parent can be located.
+    """
+    for parent in path.parents:
+        if parent.name.startswith("sub-"):
+            return parent.parent
+    return None
+
+
+@register_fix("intended_for")
+def fix_intended_for(path: Path, spec: dict) -> bool:
+    """Populate IntendedFor in a fieldmap JSON with paths to matching NIfTI files.
+
+    Searches for NIfTI files matching ``target_pattern`` within the same
+    session directory as the fieldmap JSON and sets the ``IntendedFor``
+    field.  By default paths are written relative to the subject directory
+    (e.g. ``"ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"``), which is
+    the format expected by most BIDS apps (including fMRIPrep).  Set
+    ``use_bids_uri: true`` in the spec to use the ``bids::`` URI format
+    instead.
+
+    Spec fields
+    -----------
+    target_pattern : str
+        Glob pattern for target NIfTI files, relative to the session
+        directory (e.g. ``"func/*bold.nii.gz"``).
+    use_bids_uri : bool, optional
+        When ``true``, write paths using the ``bids::`` URI scheme
+        (e.g. ``"bids::sub-01/ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"``).
+        Defaults to ``false``.
+    """
+    if path.suffix != ".json":
+        return False
+
+    target_pattern = spec.get("target_pattern", "")
+    if not target_pattern:
+        logger.warning(f"intended_for fix: no target_pattern specified for {path}")
+        return False
+
+    use_bids_uri = bool(spec.get("use_bids_uri", False))
+
+    # The session directory is the parent of the modality folder (e.g. fmap/).
+    session_dir = path.parent.parent
+
+    if use_bids_uri:
+        bids_root = _find_bids_root(path)
+        if bids_root is None:
+            logger.warning(
+                f"intended_for fix: could not determine BIDS root for {path}"
+            )
+            return False
+
+    # Collect target NIfTI files within the session directory.
+    target_paths = sorted(session_dir.glob(target_pattern))
+
+    if not target_paths:
+        logger.warning(
+            f"intended_for fix: no targets matching '{target_pattern}' in {session_dir}"
+        )
+        return False
+
+    if use_bids_uri:
+        intended_for = [
+            f"bids::{p.relative_to(bids_root).as_posix()}" for p in target_paths
+        ]
+    else:
+        # Paths relative to the subject directory (fMRIPrep-compatible format),
+        # e.g. "ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz".
+        subject_dir = session_dir.parent
+        intended_for = [p.relative_to(subject_dir).as_posix() for p in target_paths]
+
+    with open(path) as f:
+        data = json.load(f)
+    data["IntendedFor"] = intended_for
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
@@ -227,6 +313,99 @@ def remove_duplicate_niftis(paths: list[Path], spec: dict) -> int:
                     files_removed += 1
 
     return files_removed
+
+
+@register_fix("split_multiecho_nifti")
+def split_multiecho_nifti(path: Path, spec: dict) -> bool:
+    """Split a multi-echo NIfTI into separate echo volumes and an average echo image.
+
+    Expects a 4D NIfTI where the 4th dimension indexes echoes.  Produces one
+    3D file per echo (``echo-N`` entity placed after ``run-``) and one average
+    echo image (``rec-avgecho`` entity placed before ``run-``), then removes
+    the original combined file.  JSON sidecars are copied for every output
+    file and the original sidecar is removed alongside the NIfTI.
+    """
+    if not any(path.name.endswith(ext) for ext in [".nii", ".nii.gz"]):
+        return False
+
+    img = nib.load(path)
+
+    # Use img.shape to check dimensions before loading full data array
+    if len(img.shape) != 4 or img.shape[3] < 2:
+        return False
+
+    data = np.asanyarray(img.dataobj)
+    n_echoes = data.shape[3]
+
+    # Parse filename base and extension
+    if path.name.endswith(".nii.gz"):
+        ext = ".nii.gz"
+        base = path.name[:-7]
+    else:
+        ext = ".nii"
+        base = path.name[:-4]
+
+    # Locate the run entity so we can place echo- / rec- correctly
+    run_match = re.search(r"(_run-[^_]+)", base)
+
+    # JSON sidecar path (same stem, .json extension)
+    json_path = (
+        path.with_suffix("").with_suffix(".json")
+        if ext == ".nii.gz"
+        else path.with_suffix(".json")
+    )
+
+    # Save individual echo volumes
+    for echo_idx in range(n_echoes):
+        echo_num = echo_idx + 1
+        echo_data = data[..., echo_idx]
+        echo_img = nib.Nifti1Image(echo_data, img.affine, img.header)
+
+        # echo- placed immediately after run- (BIDS spec)
+        if run_match:
+            echo_base = (
+                base[: run_match.end()] + f"_echo-{echo_num}" + base[run_match.end() :]
+            )
+        else:
+            last_us = base.rfind("_")
+            if last_us >= 0:
+                echo_base = base[:last_us] + f"_echo-{echo_num}" + base[last_us:]
+            else:
+                echo_base = base + f"_echo-{echo_num}"
+
+        nib.save(echo_img, path.parent / (echo_base + ext))
+
+        if json_path.exists():
+            shutil.copy2(json_path, path.parent / (echo_base + ".json"))
+
+    # Create average echo image (float32) with rec-avgecho entity
+    avg_data = np.mean(data, axis=3).astype(np.float32)
+    avg_img = nib.Nifti1Image(avg_data, img.affine, img.header)
+    avg_img.set_data_dtype(np.float32)
+
+    # rec- placed immediately before run- (BIDS spec)
+    if run_match:
+        avg_base = (
+            base[: run_match.start()] + "_rec-avgecho" + base[run_match.start() :]
+        )
+    else:
+        last_us = base.rfind("_")
+        if last_us >= 0:
+            avg_base = base[:last_us] + "_rec-avgecho" + base[last_us:]
+        else:
+            avg_base = base + "_rec-avgecho"
+
+    nib.save(avg_img, path.parent / (avg_base + ext))
+
+    if json_path.exists():
+        shutil.copy2(json_path, path.parent / (avg_base + ".json"))
+
+    # Remove the original multi-echo file and its JSON sidecar
+    path.unlink()
+    if json_path.exists():
+        json_path.unlink()
+
+    return True
 
 
 def describe_available_fixes():
