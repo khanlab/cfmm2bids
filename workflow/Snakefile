@@ -875,9 +875,7 @@ if "spim" in config and config.get("link_to_spim", False):
         wildcard_constraints:
             session="|".join(config["spim"].keys()),
         threads: 1
-        resources:
-            mem_mb=4000,
-            runtime=1,
+        localrule: True
         log:
             "logs/link_spim/sub-{subject}_ses-{session}.log",
         shell:
