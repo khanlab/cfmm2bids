@@ -394,6 +394,65 @@ download_cache: "results/download_cache"
 
 
 # ============================================================================
+# SPIM LINKAGE (OPTIONAL, EXPERIMENTAL)
+# ============================================================================
+# Link SPIM (Single-Plane Illumination Microscopy / lightsheet) datasets to
+# the MRI BIDS output directory.
+#
+# *** NOTE: This feature is still under active development and may change. ***
+#
+# When enabled, the workflow will:
+#   1. Query the specified SPIM BIDS directory for each session using pybids
+#   2. Find subjects that exist in both the MRI and SPIM datasets
+#   3. Create symlinks in the final BIDS output directory pointing to the
+#      SPIM files (e.g., OME-Zarr and sidecar JSON files)
+#
+# The 'spim' config is a dictionary keyed by session label. Each entry
+# specifies the SPIM BIDS directory and how to locate files within it.
+# Multiple sessions (e.g., different ex-vivo batches) can be specified.
+#
+# Requirements:
+#   - The SPIM data must already be in BIDS format (e.g., produced by a
+#     lightsheet processing pipeline)
+#   - Subject IDs must match between the MRI and SPIM BIDS datasets
+#   - The 'snakebids' Python package must be available (included in pixi env)
+#
+# link_to_spim: true
+#
+# spim:
+#   # Key is the session label for these SPIM subjects in the output BIDS dataset
+#   exvivo:
+#     # Output path template (relative to sub-{subject}/ses-{session}/ in the
+#     # final BIDS dir). Use {subject} and {session} as wildcards.
+#     out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
+#
+#     # Path to the SPIM BIDS dataset directory
+#     bids_dir: /path/to/spim/bids
+#
+#     # pybids input specifications for finding the SPIM files.
+#     # Two input types are required: 'ome_zarr' (the image data) and 'json'
+#     # (the sidecar metadata). Filters should uniquely identify the SPIM files
+#     # of interest in the BIDS dataset.
+#     pybids_inputs:
+#       ome_zarr:
+#         filters:
+#           suffix: 'SPIM'
+#           extension: 'ome.zarr'
+#           sample: brain
+#           acquisition: 'imaris4x'
+#         wildcards:
+#           - subject
+#       json:
+#         filters:
+#           suffix: 'SPIM'
+#           extension: 'json'
+#           sample: brain
+#           acquisition: 'imaris4x'
+#         wildcards:
+#           - subject
+
+
+# ============================================================================
 # NOTES AND TIPS
 # ============================================================================
 #
