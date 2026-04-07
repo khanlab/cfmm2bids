@@ -1,6 +1,6 @@
 # general 
 credentials_file: ~/.uwo_credentials.bd
-final_bids_dir: "/nfs/trident3/mri/schmitz/Trip-KI-Char/bids"
+final_bids_dir: "/nfs/trident3/mri/schmitz/trip-ki-char/bids"
 
 # 1. query
 search_specs:
@@ -89,11 +89,11 @@ post_convert_fixes:
 
 #intermediate output folders
 stages:
-  query: "results/trip-KI-Char/0_query"
-  filter: "results/trip-KI-Char/1_filter"
-  download: "results/trip-KI-Char/2_download"
-  convert: "results/trip-KI-Char/3_convert"
-  fix: "results/trip-KI-Char/4_fix"
+  query: "results/trip-ki-char/0_query"
+  filter: "results/trip-ki-char/1_filter"
+  download: "results/trip-ki-char/2_download"
+  convert: "results/trip-ki-char/3_convert"
+  fix: "results/trip-ki-char/4_fix"
 
  
 # Centralized download cache 
