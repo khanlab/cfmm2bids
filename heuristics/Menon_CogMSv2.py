@@ -62,5 +62,4 @@ def infotodict(seqinfo):
                 if s.dim4 <= 2 and "SBRef" in (s.series_description).strip():
                     info[bold_sbref_ap].append({"item": s.series_id})
 
-
     return info
