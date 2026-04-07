@@ -26,7 +26,6 @@ search_specs:
         source: PatientName
         pattern: '_(AS[0-9a-zA-Z]+[MF][0-9])$'
         sanitize: true
-        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
  
         map:
           'AS160M1': null
@@ -38,10 +37,33 @@ search_specs:
           'AS167F1': null
           'AS167F5': null
           'AS167F6': null
- 
       session:
         source: StudyDate
-        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+
+  - dicom_query:
+      study_description:  "Menon^AS-MBN"
+      patient_name: "*_AS36F*"
+      study_date: 20241102-20250225
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '_(AS[0-9a-zA-Z]+[MF][0-9][a-z]?)$'
+        sanitize: true
+      session:
+        source: StudyDate
+
+  - dicom_query:
+      study_description:  "Menon^AS-MBN"
+      patient_name: "*_AS40F*"
+      study_date: 20241101-20250226
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '_(AS[0-9a-zA-Z]+[MF][0-9])$'
+        sanitize: true
+      session:
+        source: StudyDate
+
  
 query_kwargs:
   additional_tags:
@@ -85,6 +107,7 @@ study_filter_specs:
       1: '13p5m'
       2: '13p5m'
       3: '15m'
+      4: '15m'
  
 # 3. download
 cfmm2tar_download_options: '--skip-derived'
@@ -126,3 +149,33 @@ stages:
 # the same data when subject/session mappings differ
 # Default: "results/download_cache"
 download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
+
+
+
+# EXTRA: Link to SPIM microscopy datasets
+link_to_spim: True
+
+#lightsheet bids data to link to
+#  indexed by session number, so different batches can use different sessions
+spim:
+  exvivo15m3:
+    out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
+    bids_dir: /nfs/trident3/lightsheet/prado/mouse_app_lecanemab_batch2/bids
+    pybids_inputs:
+      ome_zarr:
+        filters:
+          suffix: 'SPIM'
+          extension: 'ome.zarr'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+      json:
+        filters:
+          suffix: 'SPIM'
+          extension: 'json'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+
