@@ -12,7 +12,7 @@ credentials_file: ~/.uwo_credentials
 # Final output directory for the BIDS dataset (REQUIRED)
 # Absolute or relative paths can be used, will be relative to working folder
 # Default: "bids"
-final_bids_dir: "/nfs/khan/datasets/SNSX/EPI/bids"
+final_bids_dir: "/nfs/khan/datasets/SNSX/MD/bids"
 
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
@@ -34,7 +34,7 @@ search_specs:
   - dicom_query:
       # Study description pattern (supports wildcards with *)
       # Example: "MyStudy^*" matches studies starting with "MyStudy^"
-      study_description: Khan^NeuroAnalytics
+      study_description: Lau^NeuroAnalytics
       
       # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
       # Examples:
@@ -62,16 +62,7 @@ search_specs:
 
         # Pre-map extracted values to new values (OPTIONAL)
         # Example: map  to session numbers
-        premap:
-          '2021_08_18_snSx_TLE_7T_p059': '2021_08_18_SNSX_P059'
-          '2020_02_18_snSx_p042': '2020_02_18_SNSX_P042'
-          '2021_09_15_SNSX_TLE_7T_P060': '2021_09_15_SNSX_P060'
-          '2021_09_21_SNSX_TLE_7T_P061': '2021_09_21_SNSX_P061'
-          '2022_04_27_089': '2022_04_27_SNSX_P089'
-          '2023_01_24_108': '2023_01_24_SNSX_P108'
-          '2023_01_24_109': '2023_01_24_SNSX_P109'
-          '2023_02_16_112': '2023_02_16_SNSX_P112'
-          '2018_01_23_snSx_p015': '2018_01_23_SNSX_P015'
+#        premap:
 
         #map:
           
