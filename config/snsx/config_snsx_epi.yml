@@ -247,7 +247,7 @@ study_filter_specs:
 # Common options:
 #   --skip-derived      Skip derived/processed images
 #   (empty string for no options)
-cfmm2tar_download_options: '--skip-derived'
+cfmm2tar_download_options: ''
 
 # Merge duplicate studies (OPTIONAL, default: false)
 # If true, multiple studies matching the same subject/session will be merged
@@ -464,7 +464,7 @@ post_convert_fixes:
   - name: remove_extra_bvec_bval
     pattern: "anat/*MP2RAGE.bv*"
     action: remove
-  
+ 
 
   # Additional fixes can be added below as needed.
   # Example 1: Remove unwanted files
@@ -513,11 +513,18 @@ bidsignore:
 # Default paths are shown below and are relative to the working directory.
 
 stages:
-  query: "results/0_query"        # Query results (studies.tsv)
-  filter: "results/1_filter"      # Filtered studies (studies_filtered.tsv)
-  download: "/nfs/khan/datasets/SNSX/cfmm2bids/results/2_download" # Downloaded DICOMs
+  query: "/nfs/khan/datasets/SNSX/cfmm2bids/results/EPI/0_query"        # Query results (studies.tsv)
+  filter: "/nfs/khan/datasets/SNSX/cfmm2bids/results/EPI/1_filter"      # Filtered studies (studies_filtered.tsv)
+  download: "/nfs/khan/datasets/SNSX/cfmm2bids/results/EPI/2_download" # Downloaded DICOMs
   convert: "/nfs/khan/datasets/SNSX/cfmm2bids/results/EPI/3_convert"    # Initial BIDS conversion + QC reports
   fix: "/nfs/khan/datasets/SNSX/cfmm2bids/results/EPI/4_fix"            # Fixed BIDS dataset
+
+# Centralized download cache (OPTIONAL)
+# Downloads are cached by StudyInstanceUID to avoid re-downloading
+# the same data when subject/session mappings differ
+# Default: "results/download_cache"
+download_cache: "/nfs/khan/datasets/SNSX/cfmm2bids/results/download_cache"
+
 
 
 # ============================================================================
@@ -565,3 +572,5 @@ stages:
 #    - Validator output can be found in the logs/ folder
 #
 # ============================================================================
+#
+
