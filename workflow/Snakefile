@@ -222,6 +222,7 @@ rule link_to_tar:
     resources:
         mem_mb=4000,
         runtime=5,
+    localrule: True
     script:
         "scripts/link_to_tar.py"
 
@@ -272,6 +273,7 @@ rule bidsignore_convert_staging:
     resources:
         mem_mb=4000,
         runtime=10,
+    localrule: True
     run:
         with open(output.ignore, "w") as file:
             for item in params.lines:
@@ -288,6 +290,7 @@ rule dataset_description_for_convert_staging:
     resources:
         mem_mb=4000,
         runtime=1,
+    localrule: True
     shell:
         "cp {input} {output} &> {log}"
 
@@ -444,6 +447,7 @@ rule dataset_description_fixed_staging:
     resources:
         mem_mb=4000,
         runtime=10,
+    localrule: True
     shell:
         "cp {input.dd_json} {output.dd_json} &> {log}"
 
@@ -633,6 +637,7 @@ rule assemble_final_bids:
     resources:
         mem_mb=4000,
         runtime=5,
+    localrule: True
     log:
         "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
     shell:
@@ -655,6 +660,7 @@ rule copy_final_bids_top_level_files:
     resources:
         mem_mb=4000,
         runtime=1,
+    localrule: True
     log:
         "logs/assemble_final_bids/copy_{filename}.log",
     shell:
