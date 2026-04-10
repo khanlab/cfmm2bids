@@ -23,6 +23,11 @@ credentials_file: ~/.uwo_credentials.bd
 # Default: "bids"
 final_bids_dir: "bids"
 
+# Final output directory for the uncorrected BIDS dataset (OPTIONAL)
+# Only used when gradcorrect is enabled and gradcorrect.create_bids_uncorr is true.
+# Default: "bids_uncorr"
+# final_bids_uncorr_dir: "bids_uncorr"
+
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
 # query parameters haven't changed, the workflow will skip re-querying.
@@ -327,9 +332,43 @@ post_convert_fixes:
   #   pattern: "."
   #   action: remove_duplicate_niftis
 
+  # Example 6: Set IntendedFor in fieldmap JSON files
+  #   The target_pattern is a glob relative to the session directory.
+  #   Matching NIfTI files are added to the IntendedFor field using the
+  #   bids:: URI format (e.g. bids::sub-01/ses-pre/func/*bold.nii.gz).
+  # - name: fmap_intended_for
+  #   pattern: "fmap/*.json"
+  #   action: intended_for
+  #   target_pattern: "func/*bold.nii.gz"
+
 # Lines to add to the .bidsignore file
 # bidsignore:
 #  -
+
+# ============================================================================
+# 6. GRADCORRECT STAGE - Gradient nonlinearity correction (OPTIONAL)
+# ============================================================================
+# Apply gradient nonlinearity correction using the gradcorrect BIDS app.
+# When enabled, this stage runs after the fix stage and the corrected
+# subject/session directories are used for the final BIDS assembly.
+# Requires Singularity/Apptainer to run the container; pass
+# --use-singularity (or --use-apptainer) to Snakemake when running.
+
+gradcorrect:
+  # Enable gradient nonlinearity correction (OPTIONAL, default: false)
+  enable: false
+
+  # Path to gradient coefficient file (REQUIRED when enable is true;
+  # the workflow will raise an error at startup if this is missing)
+  # grad_coeff_file: "path/to/gradient_coeff.grad"
+
+  # Also create an uncorrected BIDS dataset alongside the corrected one (OPTIONAL, default: false)
+  # Only relevant when enable is true.
+  # This is useful because the gradient-corrected BIDS dataset has been resampled, so it
+  # is helpful to retain the raw data. It also preserves series that gradcorrect drops
+  # (e.g. series with online distortion correction applied by the scanner).
+  # The uncorrected dataset is written to final_bids_uncorr_dir (default: "bids_uncorr").
+  # create_bids_uncorr: false
 
 # ============================================================================
 # INTERMEDIATE OUTPUT FOLDERS (OPTIONAL)
@@ -345,12 +384,72 @@ stages:
   download: "results/2_download"  # Downloaded DICOMs
   convert: "results/3_convert"    # Initial BIDS conversion + QC reports
   fix: "results/4_fix"            # Fixed BIDS dataset
+  gradcorr: "results/5_gradcorr"  # Gradient nonlinearity corrected BIDS dataset
 
 # Centralized download cache (OPTIONAL)
 # Downloads are cached by StudyInstanceUID to avoid re-downloading
 # the same data when subject/session mappings differ
 # Default: "results/download_cache"
 download_cache: "results/download_cache"
+
+
+# ============================================================================
+# SPIM LINKAGE (OPTIONAL, EXPERIMENTAL)
+# ============================================================================
+# Link SPIM (Single-Plane Illumination Microscopy / lightsheet) datasets to
+# the MRI BIDS output directory.
+#
+# *** NOTE: This feature is still under active development and may change. ***
+#
+# When enabled, the workflow will:
+#   1. Query the specified SPIM BIDS directory for each session using pybids
+#   2. Find subjects that exist in both the MRI and SPIM datasets
+#   3. Create symlinks in the final BIDS output directory pointing to the
+#      SPIM files (e.g., OME-Zarr and sidecar JSON files)
+#
+# The 'spim' config is a dictionary keyed by session label. Each entry
+# specifies the SPIM BIDS directory and how to locate files within it.
+# Multiple sessions (e.g., different ex-vivo batches) can be specified.
+#
+# Requirements:
+#   - The SPIM data must already be in BIDS format (e.g., produced by a
+#     lightsheet processing pipeline)
+#   - Subject IDs must match between the MRI and SPIM BIDS datasets
+#   - The 'snakebids' Python package must be available (included in pixi env)
+#
+# link_to_spim: true
+#
+# spim:
+#   # Key is the session label for these SPIM subjects in the output BIDS dataset
+#   exvivo:
+#     # Output path template (relative to sub-{subject}/ses-{session}/ in the
+#     # final BIDS dir). Use {subject} and {session} as wildcards.
+#     out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
+#
+#     # Path to the SPIM BIDS dataset directory
+#     bids_dir: /path/to/spim/bids
+#
+#     # pybids input specifications for finding the SPIM files.
+#     # Two input types are required: 'ome_zarr' (the image data) and 'json'
+#     # (the sidecar metadata). Filters should uniquely identify the SPIM files
+#     # of interest in the BIDS dataset.
+#     pybids_inputs:
+#       ome_zarr:
+#         filters:
+#           suffix: 'SPIM'
+#           extension: 'ome.zarr'
+#           sample: brain
+#           acquisition: 'imaris4x'
+#         wildcards:
+#           - subject
+#       json:
+#         filters:
+#           suffix: 'SPIM'
+#           extension: 'json'
+#           sample: brain
+#           acquisition: 'imaris4x'
+#         wildcards:
+#           - subject
 
 
 # ============================================================================

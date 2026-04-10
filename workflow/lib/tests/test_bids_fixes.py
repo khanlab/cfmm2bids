@@ -9,7 +9,9 @@ from workflow.lib.bids_fixes import (
     FIX_REGISTRY,
     _axcodes2aff,
     _compute_nifti_hash,
+    _find_bids_root,
     describe_available_fixes,
+    fix_intended_for,
     fix_orientation_quadruped,
     register_fix,
     remove_duplicate_niftis,
@@ -73,6 +75,7 @@ class TestRegisterFix:
         """Test that built-in fixes are registered correctly."""
         assert "remove" in FIX_REGISTRY
         assert "update_json" in FIX_REGISTRY
+        assert "intended_for" in FIX_REGISTRY
         assert "fix_orientation_quadruped" in FIX_REGISTRY
         assert "remove_duplicate_niftis" in FIX_REGISTRY
         assert "split_multiecho_nifti" in FIX_REGISTRY
@@ -568,3 +571,185 @@ class TestSplitMultiechoNifti:
 
         assert result is False
         assert nii_path.exists()  # original should be unchanged
+
+
+class TestFindBidsRoot:
+    """Tests for the _find_bids_root helper function."""
+
+    def test_find_bids_root_returns_parent_of_sub_dir(self, tmp_path):
+        """Test that _find_bids_root finds the BIDS root correctly."""
+        fmap_json = (
+            tmp_path / "sub-01" / "ses-pre" / "fmap" / "sub-01_ses-pre_fmap.json"
+        )
+        fmap_json.parent.mkdir(parents=True)
+        fmap_json.write_text("{}")
+
+        result = _find_bids_root(fmap_json)
+
+        assert result == tmp_path
+
+    def test_find_bids_root_returns_none_when_no_sub_dir(self, tmp_path):
+        """Test that _find_bids_root returns None when no sub-* parent exists."""
+        orphan = tmp_path / "fmap" / "test.json"
+        orphan.parent.mkdir(parents=True)
+        orphan.write_text("{}")
+
+        result = _find_bids_root(orphan)
+
+        assert result is None
+
+
+class TestFixIntendedFor:
+    """Tests for the fix_intended_for fix function."""
+
+    def _make_bids_tree(self, tmp_path):
+        """Create a minimal BIDS session directory tree."""
+        bids_root = tmp_path
+        fmap_dir = bids_root / "sub-01" / "ses-pre" / "fmap"
+        func_dir = bids_root / "sub-01" / "ses-pre" / "func"
+        fmap_dir.mkdir(parents=True)
+        func_dir.mkdir(parents=True)
+        return bids_root, fmap_dir, func_dir
+
+    def test_fix_intended_for_sets_intended_for(self, tmp_path):
+        """Test that fix_intended_for sets IntendedFor with subject-relative paths by default."""
+        bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_acq-pe_epi.json"
+        fmap_json.write_text(json.dumps({"EchoTime": 0.02}))
+
+        bold1 = func_dir / "sub-01_ses-pre_task-motor_run-1_bold.nii.gz"
+        bold2 = func_dir / "sub-01_ses-pre_task-motor_run-2_bold.nii.gz"
+        bold1.write_text("")
+        bold2.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert "IntendedFor" in data
+        assert sorted(data["IntendedFor"]) == [
+            "ses-pre/func/sub-01_ses-pre_task-motor_run-1_bold.nii.gz",
+            "ses-pre/func/sub-01_ses-pre_task-motor_run-2_bold.nii.gz",
+        ]
+
+    def test_fix_intended_for_sets_intended_for_bids_uri(self, tmp_path):
+        """Test that fix_intended_for sets IntendedFor with bids:: paths when use_bids_uri is True."""
+        bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_acq-pe_epi.json"
+        fmap_json.write_text(json.dumps({"EchoTime": 0.02}))
+
+        bold1 = func_dir / "sub-01_ses-pre_task-motor_run-1_bold.nii.gz"
+        bold2 = func_dir / "sub-01_ses-pre_task-motor_run-2_bold.nii.gz"
+        bold1.write_text("")
+        bold2.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz", "use_bids_uri": True}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert "IntendedFor" in data
+        assert sorted(data["IntendedFor"]) == [
+            "bids::sub-01/ses-pre/func/sub-01_ses-pre_task-motor_run-1_bold.nii.gz",
+            "bids::sub-01/ses-pre/func/sub-01_ses-pre_task-motor_run-2_bold.nii.gz",
+        ]
+
+    def test_fix_intended_for_overwrites_existing_intended_for(self, tmp_path):
+        """Test that fix_intended_for replaces any existing IntendedFor value."""
+        bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_fmap.json"
+        fmap_json.write_text(json.dumps({"IntendedFor": ["bids::old/path.nii.gz"]}))
+
+        bold = func_dir / "sub-01_ses-pre_task-rest_bold.nii.gz"
+        bold.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        fix_intended_for(fmap_json, spec)
+
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert data["IntendedFor"] == [
+            "ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"
+        ]
+
+    def test_fix_intended_for_returns_false_for_non_json(self, tmp_path):
+        """Test that fix_intended_for returns False for non-JSON files."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("not json")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(txt_file, spec)
+
+        assert result is False
+
+    def test_fix_intended_for_returns_false_when_no_target_pattern(self, tmp_path):
+        """Test that fix_intended_for returns False when target_pattern is absent."""
+        bids_root, fmap_dir, _ = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+
+        result = fix_intended_for(fmap_json, {})
+
+        assert result is False
+
+    def test_fix_intended_for_returns_false_when_no_targets_found(self, tmp_path):
+        """Test that fix_intended_for returns False when no NIfTI files are matched."""
+        bids_root, fmap_dir, _ = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is False
+
+    def test_fix_intended_for_returns_false_when_no_bids_root_and_bids_uri(
+        self, tmp_path
+    ):
+        """Test that fix_intended_for returns False when use_bids_uri=True and BIDS root cannot be found."""
+        fmap_dir = tmp_path / "fmap"
+        func_dir = tmp_path / "func"
+        fmap_dir.mkdir()
+        func_dir.mkdir()
+        fmap_json = fmap_dir / "test_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+        bold = func_dir / "test_bold.nii.gz"
+        bold.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz", "use_bids_uri": True}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is False
+
+    def test_fix_intended_for_works_without_bids_root_when_not_using_uri(
+        self, tmp_path
+    ):
+        """Test that fix_intended_for works without a BIDS root when use_bids_uri is False."""
+        # Use a two-level structure (subject/session/modality) without sub-/ses- prefixes
+        # so there is no BIDS root detectable, but the depth matches BIDS convention.
+        subject_dir = tmp_path / "subject"
+        session_dir = subject_dir / "session"
+        fmap_dir = session_dir / "fmap"
+        func_dir = session_dir / "func"
+        fmap_dir.mkdir(parents=True)
+        func_dir.mkdir(parents=True)
+        fmap_json = fmap_dir / "test_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+        bold = func_dir / "test_bold.nii.gz"
+        bold.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert data["IntendedFor"] == ["session/func/test_bold.nii.gz"]

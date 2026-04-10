@@ -11,10 +11,11 @@ A Snakemake workflow for converting CFMM DICOM data to BIDS format using heudico
 - Apply post-conversion fixes (remove files, update JSON metadata, fix NIfTI orientation)
 - Validate BIDS datasets
 - Generate quality control (QC) reports for each subject/session
+- Link SPIM (lightsheet microscopy) datasets to the BIDS output *(experimental, under active development)*
 
 ## Workflow Stages
 
-The workflow is organized into 5 main processing stages plus a final copy stage, each producing intermediate outputs:
+The workflow is organized into 5 main processing stages (plus optional gradcorrect and SPIM linkage stages) and a final copy stage, each producing intermediate outputs:
 
 **Note on BIDS staging:** The convert and fix stages use a two-step assembly process:
 1. Individual subject/session data is first written to `bids-staging/sub-*/ses-*/` directories
@@ -85,8 +86,88 @@ Outputs:
 - `qc/bids_validator.json` - Post-fix BIDS validation results
 - `qc/aggregate_report.html` - Aggregate QC report including fix provenance
 
-### 6. Final Stage (`bids/`)
+### 6. Gradcorrect Stage (`results/5_gradcorr`) (optional)
+Applies gradient nonlinearity correction using the [gradcorrect BIDS app](https://github.com/khanlab/gradcorrect).
+Enabled via the `gradcorrect.enable: true` config option. Requires Singularity/Apptainer and a
+gradient coefficient file (`gradcorrect.grad_coeff_file`).
+
+When enabled, the corrected per-subject/session directories replace the fix-stage directories
+as input for the final BIDS assembly.
+
+Outputs:
+- `bids-staging/sub-*/ses-*/` - Gradient-corrected BIDS data per subject/session
+
+#### Uncorrected BIDS dataset (optional)
+When gradcorrect is enabled, you can also request that the uncorrected (fix-stage) BIDS dataset
+be assembled alongside the gradient-corrected one by setting `gradcorrect.create_bids_uncorr: true`.
+This is useful because:
+- The gradient-corrected dataset has been resampled, so the raw data may be needed for some analyses.
+- Some series are dropped by gradcorrect (e.g. series with online distortion correction applied by
+  the scanner), and these will still be present in the uncorrected dataset.
+
+The uncorrected dataset is written to `final_bids_uncorr_dir` (default: `bids_uncorr`).
+
+### 7. SPIM Linkage (optional, experimental)
+
+> **⚠️ Note:** This feature is still under active development and may change in future versions.
+
+The workflow supports linking SPIM (Single-Plane Illumination Microscopy / lightsheet) datasets
+into the final MRI BIDS output directory. This is useful for studies where the same subjects
+have both MRI and ex-vivo lightsheet microscopy data, and you want a single unified BIDS dataset.
+
+When enabled (`link_to_spim: true`), the workflow will:
+1. Query the specified SPIM BIDS directory for each configured session using [snakebids](https://github.com/akhanlab/snakebids)
+2. Find subjects that exist in both the MRI and SPIM datasets
+3. Create symlinks in the final BIDS output directory pointing to the SPIM files
+   (e.g., OME-Zarr image files and their JSON sidecar metadata)
+
+The `spim` config is a dictionary keyed by **session label**. Multiple sessions (e.g., different
+ex-vivo acquisition batches) can be defined, each pointing to a separate SPIM BIDS directory.
+
+**Requirements:**
+- The SPIM data must already be organized in BIDS format (e.g., produced by a lightsheet pipeline)
+- Subject IDs must match between the MRI and SPIM BIDS datasets
+- The `snakebids` Python package must be available (included in the pixi environment)
+
+**Example configuration:**
+```yaml
+link_to_spim: true
+
+spim:
+  exvivo:
+    # Output path template relative to sub-{subject}/ses-{session}/ in the final BIDS dir
+    out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
+
+    # Path to the SPIM BIDS dataset directory
+    bids_dir: /path/to/spim/bids
+
+    # pybids input specifications to locate the SPIM files
+    pybids_inputs:
+      ome_zarr:
+        filters:
+          suffix: 'SPIM'
+          extension: 'ome.zarr'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+      json:
+        filters:
+          suffix: 'SPIM'
+          extension: 'json'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+```
+
+For a working example, see `config/trident/ki3.yml`.
+
+### 8. Final Stage (`bids/`)
 Copies the validated and fixed BIDS dataset to the final output directory.
+When gradcorrect is enabled, gradient-corrected data is used. If `gradcorrect.create_bids_uncorr`
+is also enabled, the uncorrected data is additionally copied to `bids_uncorr/` (or the path set
+by `final_bids_uncorr_dir`).
 
 Note: the workflow will not automatically clean-up subjects/sessions in the final output folder. To do this explicitly, run with the `--forcerun clean`, or `-R clean` option.
 
@@ -163,6 +244,25 @@ metadata_mappings:
 ```
 
 When `constant` is specified, it takes precedence over any `source` field, which can be omitted or will be ignored. The constant value is applied to all matching studies.
+
+#### Using Format Strings
+
+You can use the `format` option to reformat the extracted (and sanitized/remapped) value with additional text. Use `{value}` as the placeholder for the current processed value. This is applied after all other processing steps (`premap`, `pattern`, `sanitize`, `map`, `fillna`).
+
+```yaml
+metadata_mappings:
+  subject:
+    source: PatientID
+    pattern: '_([^_]+)$'    # Regex to extract subject ID
+    sanitize: true          # Remove non-alphanumeric characters
+    format: "AA{value}"     # Prepend "AA" to the extracted subject ID
+  session:
+    source: StudyDate
+    sanitize: true
+    format: "{value}T"      # Append "T" to the session value
+```
+
+This is useful when you need to add a prefix, suffix, or otherwise reformat the extracted value. For example, `format: "AA{value}"` would turn `"001"` into `"AA001"`.
 
 ### Filter Configuration (`study_filter_specs`)
 Post-filter studies with include/exclude rules:
@@ -253,6 +353,49 @@ post_convert_fixes:
 ### Other Options
 - `final_bids_dir`: Final output directory (default: `bids`)
 - `stages`: Customize intermediate stage directories
+
+### SPIM Linkage Configuration (`link_to_spim` / `spim`)
+
+> **⚠️ Note:** This feature is still under active development and may change in future versions.
+
+Enable SPIM linkage to include lightsheet microscopy data alongside MRI data in the BIDS output:
+
+```yaml
+link_to_spim: true
+
+spim:
+  # Key is the session label for SPIM subjects in the output BIDS dataset
+  exvivo:
+    # Output path template relative to sub-{subject}/ses-{session}/ in final BIDS dir
+    # Only {subject} and {session} wildcards are supported
+    out_path: micr/sub-{subject}_ses-{session}_sample-brain_acq-imaris4x_SPIM
+
+    # Path to the SPIM BIDS dataset directory
+    bids_dir: /path/to/spim/bids
+
+    # pybids input specifications to locate the SPIM files
+    pybids_inputs:
+      ome_zarr:
+        filters:
+          suffix: 'SPIM'
+          extension: 'ome.zarr'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+      json:
+        filters:
+          suffix: 'SPIM'
+          extension: 'json'
+          sample: brain
+          acquisition: 'imaris4x'
+        wildcards:
+          - subject
+```
+
+Multiple sessions (e.g., different acquisition batches) can be defined under the `spim` key.
+Subjects with no matching MRI data will generate a warning but will not cause the workflow to fail.
+See `config/trident/ki3.yml` for a real-world example with multiple batches.
 
 ## Usage
 
@@ -404,7 +547,9 @@ results/
 ├── config/                     # Configuration files
 │   ├── config.yml             # Configuration template (customize this)
 │   ├── config_trident15T.yml  # Example: Trident 15T scanner configuration
-│   └── config_cogms.yml       # Example: CogMS study configuration
+│   ├── config_cogms.yml       # Example: CogMS study configuration
+│   └── trident/               # Example configs with SPIM linkage (experimental)
+│       └── ki3.yml            # Example: Trident 15T + SPIM linkage configuration
 └── pixi.toml                  # Pixi project configuration and dependencies
 ```
 
