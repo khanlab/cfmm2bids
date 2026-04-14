@@ -231,7 +231,7 @@ study_filter_specs:
 # Common options:
 #   --skip-derived      Skip derived/processed images
 #   (empty string for no options)
-cfmm2tar_download_options: '--skip-derived'
+cfmm2tar_download_options: ''
 
 # Merge duplicate studies (OPTIONAL, default: false)
 # If true, multiple studies matching the same subject/session will be merged
