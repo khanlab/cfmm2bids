@@ -503,11 +503,17 @@ def _compute_mp2rage_uni_den(
 def gen_mp2rage_uni_den(path: Path, spec: dict) -> bool:
     """Generate a noise-robust MP2RAGE UNI-DEN T1w image from UNI, INV1, and INV2.
 
-    For a UNI MP2RAGE NIfTI file this fix locates the matching INV1 and INV2
-    inversion images in the same directory and computes a denoised T1w image
-    (UNI-DEN) using the robust combination method described in Caan et al.
-    (2019).  The output is written as a T1w NIfTI with the ``acq-`` entity set
-    to ``output_acq`` (default ``MP2RAGEpostproc``).
+    For a ``_UNIT1`` MP2RAGE NIfTI file this fix locates the matching INV1 and
+    INV2 inversion images in the same directory and computes a denoised T1w
+    image (UNI-DEN) using the robust combination method described in Caan et
+    al. (2019).  The output is written as a T1w NIfTI with the ``acq-`` entity
+    set to ``output_acq`` (default ``MP2RAGEpostproc``).
+
+    Expected filename patterns (from cfmm_base heuristic):
+
+    * UNI:   ``{prefix}_acq-MP2RAGE_{entities}_UNIT1.nii.gz``
+    * INV1:  ``{prefix}_{entities}_inv-1_MP2RAGE.nii.gz``
+    * INV2:  ``{prefix}_{entities}_inv-2_MP2RAGE.nii.gz``
 
     The fix is skipped when the destination file already exists *or* when a
     T1w file with ``acq-MP2RAGE`` (i.e. a scanner-produced T1w) is already
@@ -531,7 +537,7 @@ def gen_mp2rage_uni_den(path: Path, spec: dict) -> bool:
     multiplying_factor = int(spec.get("multiplying_factor", 6))
     output_acq = spec.get("output_acq", "MP2RAGEpostproc")
 
-    # Parse filename into parts around the _acq-UNI_ entity
+    # Parse filename: determine extension and base stem
     if path.name.endswith(".nii.gz"):
         ext = ".nii.gz"
         base = path.name[:-7]
@@ -539,36 +545,33 @@ def gen_mp2rage_uni_den(path: Path, spec: dict) -> bool:
         ext = ".nii"
         base = path.name[:-4]
 
-    acq_marker = "_acq-UNI_"
-    idx = base.find(acq_marker)
+    # Must end with _UNIT1 (BIDS MP2RAGE UNI suffix)
+    unit1_marker = "_UNIT1"
+    if not base.endswith(unit1_marker):
+        logger.warning(f"gen_mp2rage_uni_den: '_UNIT1' suffix not found in {path.name}")
+        return False
+
+    base_stripped = base[: -len(unit1_marker)]
+
+    # Must contain _acq-MP2RAGE_ to locate the split point
+    acq_marker = "_acq-MP2RAGE_"
+    idx = base_stripped.find(acq_marker)
     if idx == -1:
-        logger.warning(f"gen_mp2rage_uni_den: '_acq-UNI_' not found in {path.name}")
+        logger.warning(f"gen_mp2rage_uni_den: '_acq-MP2RAGE_' not found in {path.name}")
         return False
 
-    before_acq = base[:idx]
-    after_acq = base[idx + len(acq_marker) :]
-
-    # Strip the trailing _MP2RAGE suffix to get run/part entities
-    suffix_marker = "_MP2RAGE"
-    suffix_idx = after_acq.rfind(suffix_marker)
-    if suffix_idx == -1:
-        logger.warning(
-            f"gen_mp2rage_uni_den: '_MP2RAGE' suffix not found in {path.name}"
-        )
-        return False
-
-    after_acq_stripped = after_acq[:suffix_idx]
+    # Everything before the acq entity (subject/session prefix)
+    before_acq = base_stripped[:idx]
+    # Remaining entities after acq-MP2RAGE (e.g. run-01 or rec-DIS3D_run-01)
+    other_entities = base_stripped[idx + len(acq_marker) :]
 
     anat_dir = path.parent
 
-    inv1_path = anat_dir / f"{before_acq}_inv-1_{after_acq}{ext}"
-    inv2_path = anat_dir / f"{before_acq}_inv-2_{after_acq}{ext}"
-    existing_t1w_path = (
-        anat_dir / f"{before_acq}_acq-MP2RAGE_{after_acq_stripped}_T1w{ext}"
-    )
-    new_t1w_path = (
-        anat_dir / f"{before_acq}_acq-{output_acq}_{after_acq_stripped}_T1w{ext}"
-    )
+    # INV files share the same prefix and entities but have no acq- entity
+    inv1_path = anat_dir / f"{before_acq}_{other_entities}_inv-1_MP2RAGE{ext}"
+    inv2_path = anat_dir / f"{before_acq}_{other_entities}_inv-2_MP2RAGE{ext}"
+    existing_t1w_path = anat_dir / f"{before_acq}_acq-MP2RAGE_{other_entities}_T1w{ext}"
+    new_t1w_path = anat_dir / f"{before_acq}_acq-{output_acq}_{other_entities}_T1w{ext}"
 
     if not inv1_path.exists():
         logger.warning(f"gen_mp2rage_uni_den: INV1 not found: {inv1_path}")

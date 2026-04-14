@@ -294,7 +294,7 @@ post_convert_fixes:
     action: fix_orientation
 
   - name: gen_mp2rage_uni_den
-    pattern: "anat/*_acq-UNI_*MP2RAGE.nii.gz"
+    pattern: "anat/*_UNIT1.nii.gz"
     action: gen_mp2rage_uni_den
     multiplying_factor: 6   # optional, default 6 (range 1-10)
     output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename

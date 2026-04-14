@@ -766,6 +766,11 @@ class TestGenMp2rageUniDen:
 
         Returns a dict with keys 'uni', 'inv1', 'inv2', and the expected output
         paths 'new_t1w' and 'existing_t1w'.
+
+        Naming follows cfmm_base heuristic convention:
+          UNI:  {base}_acq-MP2RAGE_{run}_UNIT1.nii.gz
+          INV1: {base}_{run}_inv-1_MP2RAGE.nii.gz
+          INV2: {base}_{run}_inv-2_MP2RAGE.nii.gz
         """
         anat_dir = tmp_path / "anat"
         anat_dir.mkdir(parents=True, exist_ok=True)
@@ -783,14 +788,13 @@ class TestGenMp2rageUniDen:
         inv1_img = nib.Nifti1Image(inv1_data, affine)
         inv2_img = nib.Nifti1Image(inv2_data, affine)
 
-        file_end = f"_{run}_MP2RAGE.nii.gz" if run else "_MP2RAGE.nii.gz"
-        entity = f"_{run}" if run else ""
+        run_part = f"_{run}" if run else ""
 
-        uni_path = anat_dir / f"{base}_acq-UNI{file_end}"
-        inv1_path = anat_dir / f"{base}_inv-1{file_end}"
-        inv2_path = anat_dir / f"{base}_inv-2{file_end}"
-        existing_t1w = anat_dir / f"{base}_acq-MP2RAGE{entity}_T1w.nii.gz"
-        new_t1w = anat_dir / f"{base}_acq-MP2RAGEpostproc{entity}_T1w.nii.gz"
+        uni_path = anat_dir / f"{base}_acq-MP2RAGE{run_part}_UNIT1.nii.gz"
+        inv1_path = anat_dir / f"{base}{run_part}_inv-1_MP2RAGE.nii.gz"
+        inv2_path = anat_dir / f"{base}{run_part}_inv-2_MP2RAGE.nii.gz"
+        existing_t1w = anat_dir / f"{base}_acq-MP2RAGE{run_part}_T1w.nii.gz"
+        new_t1w = anat_dir / f"{base}_acq-MP2RAGEpostproc{run_part}_T1w.nii.gz"
 
         nib.save(uni_img, uni_path)
         nib.save(inv1_img, inv1_path)
@@ -929,23 +933,23 @@ class TestGenMp2rageUniDen:
         assert result is False
 
     def test_gen_mp2rage_uni_den_returns_false_when_acq_marker_missing(self, tmp_path):
-        """Test that the fix returns False when _acq-UNI_ is not in the filename."""
+        """Test that the fix returns False when _acq-MP2RAGE_ is not in the filename."""
         anat_dir = tmp_path / "anat"
         anat_dir.mkdir()
-        nii = anat_dir / "sub-01_ses-01_MP2RAGE.nii.gz"
+        nii = anat_dir / "sub-01_ses-01_run-01_UNIT1.nii.gz"
         nib.save(nib.Nifti1Image(np.zeros((5, 5, 5)), np.eye(4)), nii)
 
         result = gen_mp2rage_uni_den(nii, {})
 
         assert result is False
 
-    def test_gen_mp2rage_uni_den_returns_false_when_mp2rage_suffix_missing(
+    def test_gen_mp2rage_uni_den_returns_false_when_unit1_suffix_missing(
         self, tmp_path
     ):
-        """Test that the fix returns False when _MP2RAGE is missing from the filename."""
+        """Test that the fix returns False when _UNIT1 is missing from the filename."""
         anat_dir = tmp_path / "anat"
         anat_dir.mkdir()
-        nii = anat_dir / "sub-01_ses-01_acq-UNI_run-01_bold.nii.gz"
+        nii = anat_dir / "sub-01_ses-01_acq-MP2RAGE_run-01_MP2RAGE.nii.gz"
         nib.save(nib.Nifti1Image(np.zeros((5, 5, 5)), np.eye(4)), nii)
 
         result = gen_mp2rage_uni_den(nii, {})
