@@ -66,27 +66,31 @@ search_specs:
       # study_instance_uid: ""
       # accession_number: ""
 
-    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    # Metadata mappings: Extract subject and session IDs from DICOM fields.
+    # Mappings are processed in YAML order. Each mapping's 'source' may reference
+    # an original DICOM column (e.g. PatientID) OR a column derived by an earlier
+    # mapping in this same list (e.g. 'subject').
     metadata_mappings:
       # Subject ID extraction (REQUIRED)
       subject:
-        # DICOM field to extract from
+        # DICOM field to extract from (OR a previously-derived column name).
         # Common options: PatientID, PatientName, StudyDescription
         source: PatientID
 
         # Constant value for all subjects (OPTIONAL)
-        # If specified, all subjects will use this constant value instead of extracting from DICOM
-        # Useful for single-subject studies or when all data belongs to the same subject
+        # Behaviour depends on whether 'map' is also present:
+        #   - Without 'map': all rows are set to this constant value (global constant).
+        #   - With 'map':    acts as a catch-all default for rows not explicitly mapped
+        #                    (same as 'default:', see below).
         # Example: constant: 'pilot'
-        # Note: When using 'constant', the 'source' field can be omitted or will be ignored
+        # Note: When used as a global constant the 'source' field is not required.
         # constant: 'pilot'
 
         # Pre-map extracted values to new values (OPTIONAL)
-        # Example: map  to session numbers
-        # map:
+        # Example: correct a typo before further processing
+        # premap:
         #   194.4193.34.2.1.441.1: Sub-001
-        #   Subj04: Subj003 #e.g. if incorrect ID used
-
+        #   Subj04: Subj003
 
         # Regex pattern to extract subject ID (OPTIONAL)
         # Use capture group () to extract the desired part
@@ -103,22 +107,34 @@ search_specs:
         # fillna: '01'
 
         # Map extracted values to new values (OPTIONAL)
+        # Only the explicitly listed values are remapped; all others keep their
+        # current value unless 'default' (or 'constant') is also provided.
         # Example: map visit names to session numbers
         # map:
         #   01: 001
         #   04: 003 #e.g. if incorrect ID used
 
+        # Catch-all default for values not present in 'map' (OPTIONAL).
+        # Only meaningful when 'map' is also specified.
+        # Use null to set unmatched rows to NaN (which can then be excluded).
+        # Example: default: null
+        # default: null
+
       # Session ID extraction (REQUIRED)
       session:
-        # DICOM field to extract from
+        # DICOM field to extract from (OR a previously-derived column name).
         # Common options: StudyDate, PatientID, StudyDescription
+        # 'source' may also reference a column created by an earlier mapping,
+        # e.g. 'source: subject' to base session labels on the derived subject ID.
         source: StudyDate
 
         # Constant value for all sessions (OPTIONAL)
-        # If specified, all sessions will use this constant value instead of extracting from DICOM
-        # Useful when all data should have the same session label (e.g., all scans from same scanner)
+        # Behaviour depends on whether 'map' is also present:
+        #   - Without 'map': all rows are set to this constant (global constant).
+        #   - With 'map':    acts as catch-all default for rows not explicitly mapped
+        #                    (equivalent to 'default:', see below).
         # Example: constant: '15T'
-        # Note: When using 'constant', the 'source' field can be omitted or will be ignored
+        # Note: When used as a global constant the 'source' field is not required.
         # constant: '15T'
 
         # Regex pattern to extract session ID (OPTIONAL)
@@ -132,9 +148,25 @@ search_specs:
         # fillna: '01'
 
         # Map extracted values (OPTIONAL)
+        # Only the explicitly listed values are remapped; all others keep their
+        # current value unless 'default' (or 'constant') is also provided.
         # map:
         #   01: 'preop'
         #   02: 'postop'
+
+        # Catch-all default for values not present in 'map' (OPTIONAL).
+        # Only meaningful when 'map' is also specified.
+        # Example: assign '7T' to every subject not explicitly listed in 'map'
+        # default: '7T'
+
+        # Advanced example: base session on the derived subject column, assign
+        # '3T' to certain subjects, and '7T' to everyone else.
+        # session:
+        #   source: subject          # reference previously-derived column
+        #   map:
+        #     sub01: '3T'
+        #     sub05: '3T'
+        #   default: '7T'            # catch-all for subjects not in map
 
   # Additional search specifications (OPTIONAL)
   # You can define multiple search specs to query from different studies,

@@ -118,12 +118,16 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
         # Apply metadata extraction settings
         mappings = spec.get("metadata_mappings", {})
         for target, mapping in mappings.items():
-            # Check if a constant value is specified
-            if "constant" in mapping:
+            # Check if a constant value is specified without a map (pure constant behavior).
+            # When 'map' is also present, 'constant' acts as a catch-all default instead
+            # (see below), so we only take the all-rows-constant path when 'map' is absent.
+            if "constant" in mapping and "map" not in mapping:
                 # Use constant value for all rows
                 series = pd.Series(mapping["constant"], index=df_.index, dtype=object)
             else:
-                # Extract from source column
+                # Extract from source column.
+                # 'source' may refer to an original DICOM column OR to a previously-derived
+                # column (e.g. 'subject') created earlier in this same mappings loop.
                 source_col = mapping["source"]
                 series = df_[source_col]
 
@@ -141,7 +145,19 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
 
                 # Optional remapping of specific values
                 if "map" in mapping:
+                    # Track which rows are explicitly covered by the map before replacing
+                    mapped_mask = series.isin(mapping["map"].keys())
                     series = series.replace(mapping["map"])
+
+                    # Apply a catch-all default to rows not explicitly mapped.
+                    # 'default' takes precedence; when absent, 'constant' is treated as
+                    # an alias for the catch-all default (backwards-compatible).
+                    if "default" in mapping:
+                        series = series.copy()
+                        series.loc[~mapped_mask] = mapping["default"]
+                    elif "constant" in mapping:
+                        series = series.copy()
+                        series.loc[~mapped_mask] = mapping["constant"]
 
                 if "fillna" in mapping:
                     series = series.fillna(mapping["fillna"])
