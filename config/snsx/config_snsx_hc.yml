@@ -13,6 +13,7 @@ credentials_file: ~/.uwo_credentials
 # Absolute or relative paths can be used, will be relative to working folder
 # Default: "bids"
 final_bids_dir: "/nfs/khan/datasets/SNSX/HC/bids"
+final_bids_uncorr_dir: "/nfs/khan/datasets/SNSX/HC/bids_uncorr"
 
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
@@ -489,6 +490,28 @@ bidsignore:
   - '*echo*T1map.*'
 
 # ============================================================================
+# 6. GRADCORRECT STAGE - Gradient nonlinearity correction (OPTIONAL)
+# ============================================================================
+# Apply gradient nonlinearity correction using the gradcorrect BIDS app.
+# When enabled, this stage runs after the fix stage and the corrected
+# subject/session directories are used for the final BIDS assembly.
+# Requires Singularity/Apptainer to run the container; pass
+# --use-singularity (or --use-apptainer) to Snakemake when running.
+
+gradcorrect:
+  # Enable gradient nonlinearity correction (OPTIONAL, default: false)
+  enable: true
+
+  # Path to gradient coefficient file (REQUIRED when enable is true;
+  # the workflow will raise an error at startup if this is missing)
+  grad_coeff_file: "/nfs/khan/software/gradcorrect/coeff_AC84.grad"
+
+
+  create_bids_uncorr: true
+
+
+
+# ============================================================================
 # INTERMEDIATE OUTPUT FOLDERS (OPTIONAL)
 # ============================================================================
 # Customize the directories for intermediate workflow stages.
@@ -502,6 +525,7 @@ stages:
   download: "/nfs/khan/datasets/SNSX/cfmm2bids/results/HC/2_download" # Downloaded DICOMs
   convert: "/nfs/khan/datasets/SNSX/cfmm2bids/results/HC/3_convert"    # Initial BIDS conversion + QC reports
   fix: "/nfs/khan/datasets/SNSX/cfmm2bids/results/HC/4_fix"            # Fixed BIDS dataset
+  gradcorr: "/nfs/khan/datasets/SNSX/cfmm2bids/results/HC/5_gradcorr"            # corr BIDS dataset
 
 
 # Centralized download cache (OPTIONAL)
