@@ -145,7 +145,8 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
 
                 # Optional remapping of specific values
                 if "map" in mapping:
-                    # Track which rows are explicitly covered by the map before replacing
+                    # Track which rows are explicitly covered by the map before replacing.
+                    # series.replace() returns a copy, so no extra .copy() is needed.
                     mapped_mask = series.isin(mapping["map"].keys())
                     series = series.replace(mapping["map"])
 
@@ -153,10 +154,8 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
                     # 'default' takes precedence; when absent, 'constant' is treated as
                     # an alias for the catch-all default (backwards-compatible).
                     if "default" in mapping:
-                        series = series.copy()
                         series.loc[~mapped_mask] = mapping["default"]
                     elif "constant" in mapping:
-                        series = series.copy()
                         series.loc[~mapped_mask] = mapping["constant"]
 
                 if "fillna" in mapping:
