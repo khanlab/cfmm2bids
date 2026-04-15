@@ -654,7 +654,9 @@ def infotodict(seqinfo):
                     s.image_type[3].strip()
                 ):
                     info[t1w].append({"item": s.series_id})
-                elif "DIS2D" in (s.image_type[4].strip()) and "DIS3D" not in (s.image_type[4].strip()):
+                elif "DIS2D" in (s.image_type[4].strip()) and "DIS3D" not in (
+                    s.image_type[4].strip()
+                ):
                     info[DIS2D_t1w].append({"item": s.series_id})
                 elif "DIS3D" in (s.image_type[4].strip()):
                     info[DIS3D_t1w].append({"item": s.series_id})
