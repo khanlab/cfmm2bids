@@ -1,11 +1,14 @@
 """Integration tests for cfmm2bids workflow using Snakemake dry-run."""
 
+import hashlib
+import json
 import shutil
 import subprocess
 from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 
 # Check if snakemake is available
 try:
@@ -19,76 +22,86 @@ except (subprocess.CalledProcessError, FileNotFoundError):
     SNAKEMAKE_AVAILABLE = False
 
 
-@pytest.fixture
-def test_workdir(tmp_path):
-    """Create a temporary working directory with necessary files."""
+def _make_test_workdir(tmp_path, config_filename):
+    """Helper to create a temporary working directory with necessary files.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Base temporary directory (from pytest).
+    config_filename : str
+        Name of the config fixture file to use (e.g. 'test_config.yml').
+
+    Returns
+    -------
+    Path
+        The created working directory.
+    """
     workdir = tmp_path / "test_workflow"
     workdir.mkdir()
 
-    # Copy necessary files to the test directory
     repo_root = Path(__file__).parent.parent.parent.parent
     fixtures_dir = Path(__file__).parent / "fixtures"
 
     # Copy heuristics
-    heuristics_src = repo_root / "heuristics"
-    heuristics_dst = workdir / "heuristics"
-    shutil.copytree(heuristics_src, heuristics_dst)
+    shutil.copytree(repo_root / "heuristics", workdir / "heuristics")
 
     # Copy resources
-    resources_src = repo_root / "resources"
-    resources_dst = workdir / "resources"
-    shutil.copytree(resources_src, resources_dst)
+    shutil.copytree(repo_root / "resources", workdir / "resources")
 
     # Copy workflow
-    workflow_src = repo_root / "workflow"
-    workflow_dst = workdir / "workflow"
-    shutil.copytree(workflow_src, workflow_dst)
+    shutil.copytree(repo_root / "workflow", workdir / "workflow")
 
     # Copy test config
-    config_src = fixtures_dir / "test_config.yml"
-    config_dst = workdir / "config" / "test_config.yml"
+    config_src = fixtures_dir / config_filename
+    config_dst = workdir / "config" / config_filename
     config_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(config_src, config_dst)
 
     # Create pre-populated query results
     query_dir = workdir / "test_results" / "0_query"
     query_dir.mkdir(parents=True)
-    studies_tsv = fixtures_dir / "sample_studies.tsv"
-    shutil.copy(studies_tsv, query_dir / "studies.tsv")
+    shutil.copy(fixtures_dir / "sample_studies.tsv", query_dir / "studies.tsv")
 
-    # Create a query hash file to prevent re-querying
-    # Compute hash from test config to match what Snakemake will compute
-    import hashlib
-    import json
-
-    import yaml
-
+    # Compute query hash from config to prevent re-querying
     with open(config_dst) as f:
         test_config = yaml.safe_load(f)
 
     search_specs = test_config["search_specs"]
     query_kwargs = test_config.get("query_kwargs", {})
-    params = {"search_specs": search_specs, "query_kwargs": query_kwargs}
-    params_json = json.dumps(params, sort_keys=True)
+    params_json = json.dumps(
+        {"search_specs": search_specs, "query_kwargs": query_kwargs}, sort_keys=True
+    )
     query_hash = hashlib.sha256(params_json.encode()).hexdigest()
     (query_dir / "query_hash.txt").write_text(query_hash)
 
-    # Create fake credentials file in the test directory
+    # Create fake credentials file and update config to reference it
     creds_file = workdir / ".fake_credentials.bd"
     creds_file.write_text("fake_username\nfake_password\n")
 
-    # Update config to use the test credentials file
-    import yaml
-
-    with open(config_dst) as f:
-        test_config = yaml.safe_load(f)
     test_config["credentials_file"] = str(creds_file)
     with open(config_dst, "w") as f:
         yaml.dump(test_config, f)
 
-    yield workdir
+    return workdir
 
-    # Cleanup happens automatically when tmp_path is cleaned up
+
+@pytest.fixture
+def test_workdir(tmp_path):
+    """Create a temporary working directory using the standard test config."""
+    yield _make_test_workdir(tmp_path, "test_config.yml")
+
+
+@pytest.fixture
+def test_workdir_gradcorrect(tmp_path):
+    """Create a temporary working directory with gradcorrect enabled."""
+    yield _make_test_workdir(tmp_path, "test_config_gradcorrect.yml")
+
+
+@pytest.fixture
+def test_workdir_gradcorrect_uncorr(tmp_path):
+    """Create a temporary working directory with gradcorrect and create_bids_uncorr enabled."""
+    yield _make_test_workdir(tmp_path, "test_config_gradcorrect_uncorr.yml")
 
 
 @pytest.mark.skipif(not SNAKEMAKE_AVAILABLE, reason="Snakemake not available")
@@ -260,3 +273,121 @@ class TestDataFixtures:
         content = config_file.read_text()
         assert "search_specs" in content
         assert "heuristic" in content
+
+    def test_test_config_gradcorrect_exists(self):
+        """Test that gradcorrect test config fixture exists and is valid."""
+        fixtures_dir = Path(__file__).parent / "fixtures"
+        config_file = fixtures_dir / "test_config_gradcorrect.yml"
+
+        assert config_file.exists(), "test_config_gradcorrect.yml fixture should exist"
+
+        content = config_file.read_text()
+        assert "search_specs" in content
+        assert "heuristic" in content
+        assert "gradcorrect" in content
+        assert "grad_coeff_file" in content
+
+    def test_test_config_gradcorrect_uncorr_exists(self):
+        """Test that gradcorrect+uncorr test config fixture exists and is valid."""
+        fixtures_dir = Path(__file__).parent / "fixtures"
+        config_file = fixtures_dir / "test_config_gradcorrect_uncorr.yml"
+
+        assert config_file.exists(), (
+            "test_config_gradcorrect_uncorr.yml fixture should exist"
+        )
+
+        content = config_file.read_text()
+        assert "search_specs" in content
+        assert "gradcorrect" in content
+        assert "create_bids_uncorr: true" in content
+
+
+@pytest.mark.skipif(not SNAKEMAKE_AVAILABLE, reason="Snakemake not available")
+class TestSnakemakeDryRunGradcorrect:
+    """Test Snakemake workflow dry-run with gradcorrect enabled."""
+
+    def test_workflow_dry_run_gradcorrect_all(self, test_workdir_gradcorrect):
+        """Test that the full workflow dry-run succeeds with gradcorrect enabled."""
+        result = subprocess.run(
+            [
+                "snakemake",
+                "--configfile",
+                "config/test_config_gradcorrect.yml",
+                "--dry-run",
+                "--quiet",
+                "all",
+            ],
+            cwd=test_workdir_gradcorrect,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"Gradcorrect dry-run failed with stderr:\n{result.stderr}\n"
+            f"stdout:\n{result.stdout}"
+        )
+
+    def test_workflow_dry_run_gradcorrect_download_stage(
+        self, test_workdir_gradcorrect
+    ):
+        """Test that download stage dry-run succeeds with gradcorrect enabled."""
+        result = subprocess.run(
+            [
+                "snakemake",
+                "--configfile",
+                "config/test_config_gradcorrect.yml",
+                "--dry-run",
+                "download",
+            ],
+            cwd=test_workdir_gradcorrect,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"Gradcorrect download stage dry-run failed with stderr:\n{result.stderr}\n"
+            f"stdout:\n{result.stdout}"
+        )
+
+    def test_workflow_dry_run_gradcorrect_fix_stage(self, test_workdir_gradcorrect):
+        """Test that fix stage dry-run succeeds with gradcorrect enabled."""
+        result = subprocess.run(
+            [
+                "snakemake",
+                "--configfile",
+                "config/test_config_gradcorrect.yml",
+                "--dry-run",
+                "fix",
+            ],
+            cwd=test_workdir_gradcorrect,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"Gradcorrect fix stage dry-run failed with stderr:\n{result.stderr}\n"
+            f"stdout:\n{result.stdout}"
+        )
+
+    def test_workflow_dry_run_gradcorrect_with_uncorr_bids(
+        self, test_workdir_gradcorrect_uncorr
+    ):
+        """Test that dry-run succeeds with gradcorrect and create_bids_uncorr enabled."""
+        result = subprocess.run(
+            [
+                "snakemake",
+                "--configfile",
+                "config/test_config_gradcorrect_uncorr.yml",
+                "--dry-run",
+                "--quiet",
+                "all",
+            ],
+            cwd=test_workdir_gradcorrect_uncorr,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"Gradcorrect+uncorr dry-run failed with stderr:\n{result.stderr}\n"
+            f"stdout:\n{result.stdout}"
+        )

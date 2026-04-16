@@ -1,0 +1,49 @@
+# Test configuration for dry-run integration testing with gradcorrect enabled
+credentials_file: .fake_credentials.bd
+final_bids_dir: "test_bids"
+final_bids_uncorr_dir: "test_bids_uncorr"
+
+# Query stage - will be bypassed with pre-generated TSV
+search_specs:
+  - dicom_query:
+      study_description: Test^*
+      study_date: 20230101-
+    metadata_mappings:
+      subject:
+        source: PatientID
+        pattern: 'TestPatient([0-9]+)'
+        sanitize: true
+        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
+      session:
+        source: StudyDate
+        # constant: '01'  # Use constant value for all sessions (OPTIONAL)
+
+query_kwargs: {}
+
+study_filter_specs:
+  include:
+  exclude:
+
+cfmm2tar_download_options: '--skip-derived'
+merge_duplicate_studies: false
+
+heuristic: heuristics/cfmm_base.py
+dcmconfig_json: resources/dcm2niix_config.json
+heudiconv_options: '--minmeta'
+
+post_convert_fixes: []
+
+gradcorrect:
+  enable: true
+  grad_coeff_file: /fake/path/to/coeff_files.grad
+  create_bids_uncorr: false
+
+stages:
+  query: "test_results/0_query"
+  filter: "test_results/1_filter"
+  download: "test_results/2_download"
+  convert: "test_results/3_convert"
+  fix: "test_results/4_fix"
+  gradcorr: "test_results/5_gradcorr"
+
+download_cache: "test_results/download_cache"

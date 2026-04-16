@@ -779,18 +779,20 @@ rule validate_final:
         "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
 
 
-rule validate_final_uncorr:
-    """final validation before copying, fails if invalid"""
-    input:
-        bids_dir=stage_fix / "bids",
-    output:
-        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-    threads: 1
-    resources:
-        mem_mb=4000,
-        runtime=10,
-    shell:
-        "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
+if use_gradcorrect:
+
+    rule validate_final_uncorr:
+        """final validation before copying, fails if invalid"""
+        input:
+            bids_dir=stage_fix / "bids",
+        output:
+            validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        threads: 1
+        resources:
+            mem_mb=4000,
+            runtime=10,
+        shell:
+            "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
 
 
 rule copy_final_bids_top_level_files:
