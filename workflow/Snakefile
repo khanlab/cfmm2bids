@@ -516,13 +516,12 @@ rule assemble_fix_bids:
     """
     Assemble the fixed BIDS dataset from staging directory.
     This ensures the BIDS directory is always clean and matches the requested subjects.
-    When gradcorrect is enabled, subject/session dirs are sourced from the gradcorr stage.
     """
     input:
         dataset_description=stage_fix / "bids-staging/dataset_description.json",
         ignore=stage_fix / "bids-staging/.bidsignore",
         bids_subj_dirs=expand(
-            stage_for_assembly / "bids-staging/sub-{subject}/ses-{session}",
+            stage_fix / "bids-staging/sub-{subject}/ses-{session}",
             zip,
             subject=subjects,
             session=sessions,
@@ -611,6 +610,37 @@ rule validate_fixed:
         # validate twice, to write to log, to txt, and to json
         "bids-validator-deno {input.bids_dir} --format text &> {log} || true && "
         "bids-validator-deno {input.bids_dir} --format json_pp -o {output.validator_json} || true"
+
+
+rule assemble_gradcorr_bids:
+    """
+    Assemble the gradcorr BIDS dataset from staging directory.
+    This ensures the BIDS directory is always clean and matches the requested subjects.
+    """
+    input:
+        dataset_description=stage_gradcorr / "bids-staging/dataset_description.json",
+        ignore=stage_gradcorr / "bids-staging/.bidsignore",
+        bids_subj_dirs=expand(
+            stage_gradcorr / "bids-staging/sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+    params:
+        cmd_cp_subj_dirs=get_cmd_cp_subj_dirs,
+    output:
+        bids_dir=directory(stage_gradcorr / "bids"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=60,
+    log:
+        "logs/assemble_gradcorr_bids/assemble.log",
+    shell:
+        "mkdir -p {output.bids_dir} &>> {log} && "
+        "cp {input.dataset_description} {output.bids_dir} &>> {log} && "
+        "cp {input.ignore} {output.bids_dir} &>> {log} && "
+        "{params.cmd_cp_subj_dirs}"
 
 
 rule subject_report_convert:
@@ -711,21 +741,6 @@ rule aggregate_report_fix:
         "scripts/generate_aggregate_all_report.py"
 
 
-rule validate_final:
-    """final validation before copying, fails if invalid"""
-    input:
-        validator_json=stage_fix / "qc/bids_validator.json",
-        bids_dir=stage_fix / "bids",
-    output:
-        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-    threads: 1
-    resources:
-        mem_mb=4000,
-        runtime=10,
-    shell:
-        "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
-
-
 rule assemble_final_bids:
     """
     Assemble the final BIDS dataset by copying from the fixed BIDS directory.
@@ -735,7 +750,7 @@ rule assemble_final_bids:
     When gradcorrect is enabled, subject/session dirs are sourced from the gradcorr stage.
     """
     input:
-        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        validator_txt=stage_for_assembly / "qc/final_bids_validator.txt",  # require validated
         bids_subj_dir=stage_for_assembly / "bids-staging/sub-{subject}/ses-{session}",
     output:
         bids_subj_dir=directory(final_bids_dir / "sub-{subject}/ses-{session}"),
@@ -750,14 +765,42 @@ rule assemble_final_bids:
         "cp -RL {input.bids_subj_dir} {output.bids_subj_dir} &> {log}"
 
 
+rule validate_final:
+    """final validation before copying, fails if invalid"""
+    input:
+        bids_dir=stage_for_assembly / "bids",
+    output:
+        validator_txt=stage_for_assembly / "qc/final_bids_validator.txt",  # require validated
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10,
+    shell:
+        "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
+
+
+rule validate_final_uncorr:
+    """final validation before copying, fails if invalid"""
+    input:
+        bids_dir=stage_fix / "bids",
+    output:
+        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10,
+    shell:
+        "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
+
+
 rule copy_final_bids_top_level_files:
     """
     Copy top-level BIDS files (dataset_description.json, .bidsignore) to final BIDS directory.
     These are tracked separately from session directories to allow incremental updates.
     """
     input:
-        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-        src_file=stage_fix / "bids-staging/{filename}",
+        validator_txt=stage_for_assembly / "qc/final_bids_validator.txt",  # require validated
+        src_file=stage_for_assembly / "bids-staging/{filename}",
     output:
         dst_file=final_bids_dir / "{filename}",
     wildcard_constraints:
@@ -843,6 +886,33 @@ rule clean:
         runtime=10,
     log:
         "logs/clean_final_bids/clean.log",
+    script:
+        "scripts/clean_final_bids.py"
+
+
+rule clean_uncorr:
+    """
+    Clean the final uncorrected BIDS directory by removing files that are not part of the current dataset.
+    This rule finds extraneous files (mainly sub-*/ses-* directories) that should not be present
+    and removes them, keeping the directory clean when subjects/sessions are removed from the dataset.
+    """
+    input:
+        session_dirs=expand(
+            final_bids_uncorr_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        dataset_description=final_bids_uncorr_dir / "dataset_description.json",
+        bidsignore=final_bids_uncorr_dir / ".bidsignore",
+    output:
+        clean_marker=touch(final_bids_uncorr_dir / ".clean_marker"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10,
+    log:
+        "logs/clean_final_uncorr_bids/clean.log",
     script:
         "scripts/clean_final_bids.py"
 
