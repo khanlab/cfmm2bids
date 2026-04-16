@@ -29,3 +29,6 @@ jobs:
       
       - name: Run integration tests (dry-run)
         run: pixi run -e dev pytest workflow/lib/tests/test_integration.py::TestSnakemakeDryRun -v
+      
+      - name: Run integration tests (dry-run, gradcorrect)
+        run: pixi run -e dev pytest workflow/lib/tests/test_integration.py::TestSnakemakeDryRunGradcorrect -v
