@@ -101,12 +101,11 @@ search_specs:
       session:
         # DICOM field to extract from
         # Common options: StudyDate, PatientID, StudyDescription
-        source: StudyDate
+        source: subject
         
         # Regex pattern to extract session ID (OPTIONAL)
         # pattern: ''
         
-        constant: '7T'
         
         # Remove non-alphanumeric characters (OPTIONAL, default: false)
         # sanitize: true
@@ -116,10 +115,18 @@ search_specs:
         # fillna: '01'
         
         # Map extracted values (OPTIONAL)
-        # map:
-        #   01: 'preop'
-        #   02: 'postop'
+        map:
+          P040: '3T'
+          P055: '3T'
+          P089: '3T'
+          P103: '3T'
+          P104: '3T'
+          P108: '3T'
+          P109: '3T'
+          P112: '3T'
+          P138: '3T'
 
+        default: '7T'
 
 
 
