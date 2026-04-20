@@ -149,6 +149,13 @@ study_filter_specs:
   #   - "subject.str.startswith('sub')"   # Include only subjects starting with 'sub'
   #   - "session == '01'"                 # Include only first session
   include:
+   - "subject.str.isin(['sub-P001', 'sub-P002', 'sub-P003', 'sub-P004', 'sub-P005', 'sub-P006', 'sub-P007', 'sub-P009', 'sub-P010', 'sub-P011', 'sub-P016', 'sub-P017', 'sub-P019', 'sub-P023', 'sub-P024', 'sub-P025', 'sub-P027', 'sub-P030', 'sub-P033', 'sub-P034', 'sub-P035', 'sub-P036', 
+   'sub-P037', 'sub-P038', 'sub-P039', 'sub-P040', 'sub-P041', 'sub-P042', 'sub-P043', 'sub-P062', 'sub-P063', 'sub-P064', 'sub-P065', 'sub-P066', 'sub-P068', 'sub-P069', 'sub-P073', 'sub-P075', 'sub-P082', 'sub-P083', 'sub-P086', 'sub-P088', 'sub-P091', 'sub-P093', 'sub-P094', 'sub-P096', 
+   'sub-P098', 'sub-P101', 'sub-P102', 'sub-P110', 'sub-P114', 'sub-P116', 'sub-P119', 'sub-P122', 'sub-P125', 'sub-P132 ', 'sub-P136', 'sub-P137', 'sub-P142', 'sub-P145', 'sub-P146', 'sub-P147', 'sub-P148', 'sub-P149', 'sub-P152', 'sub-P153', 'sub-P157', 'sub-P158', 'sub-P160', 'sub-P163', 
+   'sub-P179', 'sub-P184', 'sub-P186', 'sub-P189', 'sub-P182', 'sub-P202', 'sub-P204', 'sub-P205', 'sub-P214', 'sub-P223', 'sub-P226', 'sub-P228', 'sub-P231', 'sub-P243', 'sub-P246', 'sub-P248', 'sub-P249', 'sub-P250', 'sub-P257', 'sub-P263', 'sub-P265', 'sub-P267', 'sub-P184', 'sub-P271', 
+   'sub-P273', 'sub-P276', 'sub-P277', 'sub-P278', 'sub-P281', 'sub-P288', 'sub-P294', 'sub-P295', 'sub-P295'])"
+
+
   
   # Exclude rules (OPTIONAL)
   # Studies matching ANY exclude rule will be filtered out
