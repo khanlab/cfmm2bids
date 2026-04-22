@@ -449,7 +449,13 @@ post_convert_fixes:
   - name: remove_extra_bvec_bval
     pattern: "anat/*MP2RAGE.bv*"
     action: remove
-  
+ 
+  - name: gen_mp2rage_uni_den
+    pattern: "anat/*_UNIT1.nii.gz"
+    action: gen_mp2rage_uni_den
+    multiplying_factor: 6   # optional, default 6 (range 1-10)
+    output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename
+ 
 
   # Additional fixes can be added below as needed.
   # Example 1: Remove unwanted files

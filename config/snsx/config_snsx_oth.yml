@@ -12,8 +12,8 @@ credentials_file: ~/.uwo_credentials
 # Final output directory for the BIDS dataset (REQUIRED)
 # Absolute or relative paths can be used, will be relative to working folder
 # Default: "bids"
-final_bids_dir: "/nfs/khan/datasets/SNSX/MD/bids"
-final_bids_uncorr_dir: "/nfs/khan/datasets/SNSX/MD/bids_uncorr"
+final_bids_dir: "/nfs/khan/datasets/SNSX/OTH/bids"
+final_bids_uncorr_dir: "/nfs/khan/datasets/SNSX/OTH/bids_uncorr"
 
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
@@ -110,6 +110,115 @@ search_specs:
         # map:
         #   01: 'preop'
         #   02: 'postop'
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description: Khan^NeuroAnalytics
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20170101-
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+      # patient_name: ""
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject: 
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
+
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+#        premap:
+
+
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '[sS][nN][sS][xX]_([cCpP][0-9]+)$'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        #fillna: '01'
+       
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        map:
+          P016: P016
+          P019: P019
+          P023: P023
+          P024: P024
+          P025: P025
+          P027: P027
+          P030: P030
+          P033: P033
+          P034: P034
+          P035: P035
+          P036: P036
+          P038: P038
+          P039: P039
+          P040: P040
+          P041: P041
+          P042: P042
+          P043: P043
+          P062: P062
+          P063: P063
+          P064: P064
+          P065: P065
+          P066: P066
+          P068: P068
+          P069: P069
+          P073: P073
+          P075: P075
+          P082: P082
+          P083: P083
+          P086: P086
+          P088: P088
+          P091: P091
+          P093: P093
+          P096: P096
+          P101: P101
+        default: exclude
+
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
+        source: StudyDate
+        
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        constant: '7T'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
+        # Map extracted values (OPTIONAL)
+        # map:
+        #   01: 'preop'
+        #   02: 'postop'
   
   # Additional search specifications (OPTIONAL)
   # You can define multiple search specs to query from different studies,
@@ -149,12 +258,6 @@ study_filter_specs:
   #   - "subject.str.startswith('sub')"   # Include only subjects starting with 'sub'
   #   - "session == '01'"                 # Include only first session
   include:
-   - "subject.str.isin(['sub-P001', 'sub-P002', 'sub-P003', 'sub-P004', 'sub-P005', 'sub-P006', 'sub-P007', 'sub-P009', 'sub-P010', 'sub-P011', 'sub-P016', 'sub-P017', 'sub-P019', 'sub-P023', 'sub-P024', 'sub-P025', 'sub-P027', 'sub-P030', 'sub-P033', 'sub-P034', 'sub-P035', 
-   'sub-P036', 'sub-P037', 'sub-P038', 'sub-P039', 'sub-P040', 'sub-P041', 'sub-P042', 'sub-P043', 'sub-P062', 'sub-P063', 'sub-P064', 'sub-P065', 'sub-P066', 'sub-P068', 'sub-P069', 'sub-P073', 'sub-P075', 'sub-P082', 'sub-P083', 'sub-P086', 'sub-P088', 'sub-P091', 'sub-P093', 
-   'sub-P094', 'sub-P096', 'sub-P098', 'sub-P101', 'sub-P102', 'sub-P110', 'sub-P114', 'sub-P116', 'sub-P119', 'sub-P120', 'sub-P122', 'sub-P125', 'sub-P132 ', 'sub-P136', 'sub-P137', 'sub-P142', 'sub-P145', 'sub-P146', 'sub-P147', 'sub-P148', 'sub-P149', 'sub-P152', 'sub-P153', 
-   'sub-P157', 'sub-P158', 'sub-P160', 'sub-P163', 'sub-P179', 'sub-P184', 'sub-P186', 'sub-P189', 'sub-P182', 'sub-P202', 'sub-P204', 'sub-P205', 'sub-P210', 'sub-P210', 'sub-P214', 'sub-P223', 'sub-P226', 'sub-P228', 'sub-P231', 'sub-P243', 'sub-P246', 'sub-P248', 'sub-P249', 
-   'sub-P250', 'sub-P257', 'sub-P263', 'sub-P265', 'sub-P267', 'sub-P184', 'sub-P271', 'sub-P273', 'sub-P276', 'sub-P277', 'sub-P278', 'sub-P281', 'sub-P288', 'sub-P294', 'sub-P295', 'sub-P295'])"
-
 
   
   # Exclude rules (OPTIONAL)
@@ -177,6 +280,38 @@ study_filter_specs:
     - PatientID.str.contains('Hipp7T')
     - PatientID.str.contains('DiffModel')
     - PatientID.str.contains('cadaver')
+    - "subject == 'P118'" # moved to EPI
+    - "subject == 'P121'" # moved to EPI
+    - "subject == 'P141'" # moved to EPI
+    - "subject == 'P164'" # moved to EPI
+    - "subject == 'P174'" # moved to EPI
+    - "subject == 'P180'" # moved to EPI
+    - "subject == 'P174'" # moved to EPI
+    - "subject == 'P164'" # moved to EPI
+    - "subject == 'P118'" # moved to EPI
+    - "subject == 'P194'" # moved to EPI
+    - "subject == 'P199'" # moved to EPI
+    - "subject == 'P200'" # moved to EPI
+    - "subject == 'P208'" # moved to EPI
+    - "subject == 'P213'" # moved to EPI
+    - "subject == 'P219'" # moved to EPI
+    - "subject == 'P222'" # moved to EPI
+    - "subject == 'P230'" # moved to EPI
+    - "subject == 'P232'" # moved to EPI
+    - "subject == 'P238'" # moved to EPI
+    - "subject == 'P242'" # moved to EPI
+    - "subject == 'P245'" # moved to EPI
+    - "subject == 'P251'" # moved to EPI
+    - "subject == 'P252'" # moved to EPI
+    - "subject == 'P255'" # moved to EPI
+    - "subject == 'P256'" # moved to EPI
+    - "subject == 'P269'" # moved to EPI
+    - "subject == 'P274'" # moved to EPI
+    - "subject == 'P286'" # moved to EPI
+    - "subject == 'P287'" # moved to EPI
+    - "subject == 'P290'" # moved to EPI
+    - "subject == 'P293'" # moved to EPI
+    - "subject == 'exclude'"
   
   # Remap sessions based on study date ordering (OPTIONAL)
   # This feature automatically remaps session IDs to time-based labels
@@ -464,6 +599,11 @@ post_convert_fixes:
     pattern: "anat/*MP2RAGE.bv*"
     action: remove
   
+  - name: gen_mp2rage_uni_den
+    pattern: "anat/*_UNIT1.nii.gz"
+    action: gen_mp2rage_uni_den
+    multiplying_factor: 6   # optional, default 6 (range 1-10)
+    output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename
 
   # Additional fixes can be added below as needed.
   # Example 1: Remove unwanted files
@@ -534,12 +674,12 @@ gradcorrect:
 # Default paths are shown below and are relative to the working directory.
 
 stages:
-  query: "/nfs/khan/datasets/SNSX/cfmm2bids/results/MD/results/0_query"        # Query results (studies.tsv)
-  filter: "/nfs/khan/datasets/SNSX/cfmm2bids/results/MD/1_filter"      # Filtered studies (studies_filtered.tsv)
-  download: "/nfs/khan/datasets/SNSX/cfmm2bids/results/MD/2_download" # Downloaded DICOMs
-  convert: "/nfs/khan/datasets/SNSX/cfmm2bids/results/MD/3_convert"    # Initial BIDS conversion + QC reports
-  fix: "/nfs/khan/datasets/SNSX/cfmm2bids/results/MD/4_fix"            # Fixed BIDS dataset
-  gradcorr: "/nfs/khan/datasets/SNSX/cfmm2bids/results/MD/5_gradcorr"            # corr BIDS dataset
+  query: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/results/0_query"        # Query results (studies.tsv)
+  filter: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/1_filter"      # Filtered studies (studies_filtered.tsv)
+  download: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/2_download" # Downloaded DICOMs
+  convert: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/3_convert"    # Initial BIDS conversion + QC reports
+  fix: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/4_fix"            # Fixed BIDS dataset
+  gradcorr: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/5_gradcorr"            # corr BIDS dataset
 
 
 

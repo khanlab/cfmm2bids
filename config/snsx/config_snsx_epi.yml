@@ -128,7 +128,113 @@ search_specs:
 
         default: '7T'
 
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description: Lau^NeuroAnalytics
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20170101-
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+      # patient_name: ""
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject: 
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
 
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+#        premap:
+
+
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '[sS][nN][sS][xX]_([cCpP][0-9]+)$'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        #fillna: '01'
+       
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        map:
+          P118: P118
+          P121: P121
+          P141: P141
+          P164: P164
+          P174: P174
+          P180: P180
+          P174: P174
+          P164: P164
+          P118: P118
+          P194: P194
+          P199: P199
+          P200: P200
+          P208: P208
+          P213: P213
+          P219: P219
+          P222: P222
+          P230: P230
+          P232: P232
+          P238: P238
+          P242: P242
+          P245: P245
+          P251: P251
+          P252: P252
+          P255: P255
+          P256: P256
+          P269: P269
+          P274: P274
+          P286: P286
+          P287: P287
+          P290: P290
+          P293: P293
+        default: exclude
+
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
+        source: StudyDate
+        
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        constant: '7T'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
+        # Map extracted values (OPTIONAL)
+        # map:
+        #   01: 'preop'
+        #   02: 'postop'
+ 
 
   # Additional search specifications (OPTIONAL)
   # You can define multiple search specs to query from different studies,
@@ -168,15 +274,6 @@ study_filter_specs:
   #   - "subject.str.startswith('sub')"   # Include only subjects starting with 'sub'
   #   - "session == '01'"                 # Include only first session
   include:
-    - "subject.isin(['sub-P008', 'sub-P012', 'sub-P013', 'sub-P014', 'sub-P015', 'sub-P018', 'sub-P020', 'sub-P021', 'sub-P022', 'sub-P026', 'sub-P028', 'sub-P029', 'sub-P031', 'sub-P032', 'sub-P046', 'sub-P048', 'sub-P049', 'sub-P051', 'sub-P052', 'sub-P054', 'sub-P055', 
-    'sub-P056', 'sub-P057', 'sub-P058', 'sub-P059', 'sub-P060', 'sub-P061', 'sub-P067', 'sub-P070', 'sub-P071', 'sub-P072', 'sub-P074', 'sub-P076', 'sub-P077', 'sub-P078', 'sub-P079', 'sub-P080', 'sub-P081', 'sub-P084', 'sub-P085', 'sub-P087', 'sub-P089', 'sub-P090', 'sub-P092', 
-    'sub-P095', 'sub-P097', 'sub-P099', 'sub-P100', 'sub-P103', 'sub-P104', 'sub-P105', 'sub-P106', 'sub-P107', 'sub-P108', 'sub-P109', 'sub-P111', 'sub-P112', 'sub-P113', 'sub-P115', 'sub-P117', 'sub-P118', 'sub-P121', 'sub-P123', 'sub-P124', 'sub-P126', 'sub-P127', 'sub-P128', 
-    'sub-P129', 'sub-P130', 'sub-P131', 'sub-P133', 'sub-P134', 'sub-P138', 'sub-P139', 'sub-P140', 'sub-P141', 'sub-P150', 'sub-P151', 'sub-P154', 'sub-P155', 'sub-P156', 'sub-P159', 'sub-P161', 'sub-P162', 'sub-P164', 'sub-P165', 'sub-P166', 'sub-P167', 'sub-P168', 'sub-P169', 
-    'sub-P170', 'sub-P171', 'sub-P172', 'sub-P173', 'sub-P174', 'sub-P175', 'sub-P176', 'sub-P177', 'sub-P178', 'sub-P180', 'sub-P181', 'sub-P174', 'sub-P164', 'sub-P185', 'sub-P118', 'sub-P190', 'sub-P191', 'sub-P192', 'sub-P193', 'sub-P194', 'sub-P195', 'sub-P196', 'sub-P197', 
-    'sub-P199', 'sub-P200', 'sub-P201', 'sub-P206', 'sub-P207', 'sub-P208', 'sub-P209', 'sub-P211', 'sub-P212', 'sub-P213', 'sub-P216', 'sub-P217', 'sub-P219', 'sub-P220', 'sub-P221', 'sub-P222', 'sub-P224', 'sub-P225', 'sub-P227', 'sub-P229', 'sub-P230', 'sub-P232', 'sub-P187',
-    'sub-P233', 'sub-P234', 'sub-P236', 'sub-P238', 'sub-P240', 'sub-P241', 'sub-P242', 'sub-P244', 'sub-P245', 'sub-P251', 'sub-P252', 'sub-P253', 'sub-P255', 'sub-P256', 'sub-P258', 'sub-P259', 'sub-P260', 'sub-P261', 'sub-P262', 'sub-P264', 'sub-P266', 'sub-P268', 
-    'sub-P269', 'sub-P270', 'sub-P272', 'sub-P274', 'sub-P275', 'sub-P279', 'sub-P280', 'sub-P282', 'sub-P283', 'sub-P284', 'sub-P285', 'sub-P286', 'sub-P287', 'sub-P290', 'sub-P292', 'sub-P293', 'sub-P296', 'sub-P297'])"
-
   
   # Exclude rules (OPTIONAL)
   # Studies matching ANY exclude rule will be filtered out
@@ -198,7 +295,43 @@ study_filter_specs:
     - PatientID.str.contains('Hipp7T')
     - PatientID.str.contains('DiffModel')
     - PatientID.str.contains('cadaver')
-  
+    - "subject == 'P233'" #incomplete scan (only localizer)
+    - "subject == 'P016'" # moved to OTH
+    - "subject == 'P019'" # moved to OTH
+    - "subject == 'P023'" # moved to OTH
+    - "subject == 'P024'" # moved to OTH
+    - "subject == 'P025'" # moved to OTH
+    - "subject == 'P027'" # moved to OTH
+    - "subject == 'P030'" # moved to OTH
+    - "subject == 'P033'" # moved to OTH
+    - "subject == 'P034'" # moved to OTH
+    - "subject == 'P035'" # moved to OTH
+    - "subject == 'P036'" # moved to OTH
+    - "subject == 'P038'" # moved to OTH
+    - "subject == 'P039'" # moved to OTH
+    - "subject == 'P040'" # moved to OTH
+    - "subject == 'P041'" # moved to OTH
+    - "subject == 'P042'" # moved to OTH
+    - "subject == 'P043'" # moved to OTH
+    - "subject == 'P062'" # moved to OTH
+    - "subject == 'P063'" # moved to OTH
+    - "subject == 'P064'" # moved to OTH
+    - "subject == 'P065'" # moved to OTH
+    - "subject == 'P066'" # moved to OTH
+    - "subject == 'P068'" # moved to OTH
+    - "subject == 'P069'" # moved to OTH
+    - "subject == 'P073'" # moved to OTH
+    - "subject == 'P075'" # moved to OTH
+    - "subject == 'P082'" # moved to OTH
+    - "subject == 'P083'" # moved to OTH
+    - "subject == 'P086'" # moved to OTH
+    - "subject == 'P088'" # moved to OTH
+    - "subject == 'P091'" # moved to OTH
+    - "subject == 'P093'" # moved to OTH
+    - "subject == 'P096'" # moved to OTH
+    - "subject == 'P101'" # moved to OTH
+    - "subject == 'exclude'"
+
   # Remap sessions based on study date ordering (OPTIONAL)
   # This feature automatically remaps session IDs to time-based labels
   # based on the temporal ordering of study dates for each subject.
@@ -485,6 +618,11 @@ post_convert_fixes:
     pattern: "anat/*MP2RAGE.bv*"
     action: remove
  
+  - name: gen_mp2rage_uni_den
+    pattern: "anat/*_UNIT1.nii.gz"
+    action: gen_mp2rage_uni_den
+    multiplying_factor: 6   # optional, default 6 (range 1-10)
+    output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename
 
   # Additional fixes can be added below as needed.
   # Example 1: Remove unwanted files
