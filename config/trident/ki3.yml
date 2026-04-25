@@ -51,6 +51,7 @@ study_filter_specs:
     
     # Reference date mode (OPTIONAL)
     # Default (commented out): Uses first session per subject as reference (baseline mode)
+    # Alternative: Use PatientBirthDate to calculate age at scan
     # reference_col: 'PatientBirthDate'
     # reference_format: '%Y%m%d'
  
