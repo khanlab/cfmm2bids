@@ -65,6 +65,7 @@ study_filter_specs:
     # Rounding step for time intervals (OPTIONAL, default: 6)
     # For example, with units='months' and round_step=1:
     #   - Sessions will be labeled by rounded month intervals (0m, 1m, 2m, etc.)
+    # Can also be a list for unequally-spaced timepoints, e.g. round_step: [0, 3, 6, 10]
     round_step: 3
     
     # Zero-pad session labels (OPTIONAL, default: false)

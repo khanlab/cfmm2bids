@@ -242,11 +242,16 @@ study_filter_specs:
     # units: 'months'
 
     # Rounding step for time intervals (OPTIONAL, default: 6)
+    # Can be a single number (evenly-spaced steps) or a list of specific timepoints.
     # For example, with units='months' and round_step=6:
     #   - 0-3 months → 0m
     #   - 3-9 months → 6m
     #   - 9-15 months → 12m
     # round_step: 6
+    #
+    # Or, to handle unequally-spaced timepoints, provide an explicit list:
+    # round_step: [0, 3, 6, 10]
+    # Each value is snapped to the nearest timepoint in the list.
 
     # Zero-pad session labels (OPTIONAL, default: false)
     # If true, pads session labels with leading zeros to the width of the largest number.

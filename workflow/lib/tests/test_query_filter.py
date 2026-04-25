@@ -1,8 +1,9 @@
 """Tests for query_filter module."""
 
 import pandas as pd
+import pytest
 
-from workflow.lib.query_filter import query_dicoms
+from workflow.lib.query_filter import query_dicoms, remap_sessions_by_date
 
 
 class TestMetadataMappingsConstant:
@@ -579,3 +580,102 @@ class TestMetadataMappingsDerivedSource:
 
         assert len(result_df) == 3
         assert all(result_df["session"] == "15T")
+
+
+class TestRemapSessionsByDateRoundStep:
+    """Tests for remap_sessions_by_date with scalar and list round_step."""
+
+    def _make_df(self, subjects, sessions):
+        return pd.DataFrame({"subject": subjects, "session": sessions})
+
+    def test_scalar_round_step_evenly_spaced(self):
+        """Scalar round_step snaps to nearest multiple (existing behaviour)."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub01"],
+            ["20200101", "20200701", "20210101"],
+        )
+        result = remap_sessions_by_date(df, round_step=6)
+        sessions = list(result["session"])
+        assert sessions[0] == "0m"
+        assert sessions[1] == "6m"
+        assert sessions[2] == "12m"
+
+    def test_list_round_step_equally_spaced(self):
+        """List round_step with equal spacing matches scalar behaviour."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub01"],
+            ["20200101", "20200701", "20210101"],
+        )
+        result_scalar = remap_sessions_by_date(df, round_step=6)
+        result_list = remap_sessions_by_date(df, round_step=[0, 6, 12, 18])
+        assert list(result_scalar["session"]) == list(result_list["session"])
+
+    def test_list_round_step_unequal_spacing(self):
+        """List round_step correctly snaps to nearest unequally-spaced breakpoint."""
+        # Sessions at 0, ~3, ~6, ~10 months
+        df = self._make_df(
+            ["sub01", "sub01", "sub01", "sub01"],
+            ["20200101", "20200401", "20200701", "20201101"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 3, 6, 10])
+        sessions = list(result["session"])
+        assert sessions[0] == "0m"
+        assert sessions[1] == "3m"
+        assert sessions[2] == "6m"
+        assert sessions[3] == "10m"
+
+    def test_list_round_step_midpoint_snaps_to_nearest(self):
+        """A value exactly between two breakpoints snaps to the nearest one."""
+        # ~4.5 months since baseline – equidistant between 3 and 6, numpy picks lower index
+        df = self._make_df(
+            ["sub01", "sub01"],
+            ["20200101", "20200615"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 3, 6, 10])
+        # ~5.5 months → closer to 6
+        assert result["session"].iloc[1] == "6m"
+
+    def test_list_round_step_custom_time_to_label(self):
+        """Custom time_to_label still works when list round_step is used."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub01"],
+            ["20200101", "20200401", "20200701"],
+        )
+        result = remap_sessions_by_date(
+            df,
+            round_step=[0, 3, 6],
+            time_to_label={0: "baseline", 3: "3mo", 6: "6mo"},
+        )
+        sessions = list(result["session"])
+        assert sessions[0] == "baseline"
+        assert sessions[1] == "3mo"
+        assert sessions[2] == "6mo"
+
+    def test_list_round_step_single_subject_multiple_sessions(self):
+        """List round_step handles multiple sessions for one subject correctly."""
+        df = self._make_df(
+            ["sub01"] * 4,
+            ["20200101", "20200401", "20200701", "20201101"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 3, 6, 10])
+        assert list(result["session"]) == ["0m", "3m", "6m", "10m"]
+
+    def test_list_round_step_multiple_subjects(self):
+        """List round_step handles multiple subjects independently."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub02", "sub02"],
+            ["20200101", "20201101", "20190601", "20191201"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 6])
+        # Each subject starts at 0; second session ~10 months → snaps to 6
+        for _, grp in result.groupby("subject"):
+            sessions = list(grp["session"])
+            assert sessions[0] == "0m"
+            assert sessions[1] == "6m"
+
+    @pytest.mark.parametrize("step_input", [[0, 6], (0, 6)])
+    def test_list_or_tuple_accepted(self, step_input):
+        """Both list and tuple are accepted as round_step."""
+        df = self._make_df(["sub01", "sub01"], ["20200101", "20200701"])
+        result = remap_sessions_by_date(df, round_step=step_input)
+        assert list(result["session"]) == ["0m", "6m"]

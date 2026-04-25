@@ -210,7 +210,7 @@ def remap_sessions_by_date(
     original_session = df[session_col]
 
     # --- Parse session dates; non-parsable -> NaT ---
-    if not np.issubdtype(df[session_col].dtype, np.datetime64):
+    if not pd.api.types.is_datetime64_any_dtype(df[session_col]):
         session_date = pd.to_datetime(
             df[session_col],
             format=session_format,
@@ -240,7 +240,7 @@ def remap_sessions_by_date(
         if reference_col not in df.columns:
             raise ValueError(f"reference_col '{reference_col}' not found in dataframe")
 
-        if not np.issubdtype(df[reference_col].dtype, np.datetime64):
+        if not pd.api.types.is_datetime64_any_dtype(df[reference_col]):
             ref_parsed = pd.to_datetime(
                 df[reference_col],
                 format=reference_format,
@@ -272,13 +272,22 @@ def remap_sessions_by_date(
     else:
         raise ValueError("units must be one of {'days', 'months', 'years'}")
 
-    time_rounded = (np.round(time_diff / round_step) * round_step).astype(float)
+    if isinstance(round_step, (list, tuple, np.ndarray)):
+        breakpoints = np.asarray(round_step, dtype=float)
+        diffs = np.abs(time_diff.values[:, np.newaxis] - breakpoints[np.newaxis, :])
+        nearest_idx = np.argmin(diffs, axis=1)
+        time_rounded = pd.Series(
+            breakpoints[nearest_idx], index=time_diff.index, dtype=float
+        )
+    else:
+        time_rounded = (np.round(time_diff / round_step) * round_step).astype(float)
 
     # Label mapping (custom first)
     if time_to_label is None:
         time_to_label = {}
 
-    time_label = time_rounded.map(time_to_label)
+    # Use object dtype to allow mixed NaN/string values regardless of pandas version
+    time_label = time_rounded.map(time_to_label).astype(object)
 
     # Fill unmapped finite values with default labels
     finite_mask = np.isfinite(time_rounded.to_numpy())
@@ -295,7 +304,8 @@ def remap_sessions_by_date(
         else:
             default_labels = rounded_int.astype(str) + units[0]
 
-        time_label.loc[finite_idx] = time_label.loc[finite_idx].fillna(default_labels)
+        unmapped = time_label.loc[finite_idx].isna()
+        time_label.loc[finite_idx[unmapped]] = default_labels.loc[finite_idx[unmapped]]
 
     # --- Write back only for rows we successfully processed; others stay original ---
     df[session_col] = original_session
