@@ -314,6 +314,69 @@ def remap_sessions_by_date(
     return df
 
 
+def remap_values(df, remap_specs):
+    """
+    Manually remap values in specific columns for rows matching a query.
+
+    This provides a way to manually correct remapping results (e.g. after
+    ``remap_sessions_by_date``) for individual subjects or rows where
+    automatic remapping produced an incorrect result.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to remap.
+    remap_specs : list of dict
+        Each dict must have the following keys:
+
+        - ``query``: str – a pandas query string that selects the rows to
+          remap (passed to :meth:`pandas.DataFrame.query`).
+        - ``column``: str – the name of the column whose value should be
+          updated for matching rows.
+        - ``value``: scalar – the new value to assign to the column for all
+          matching rows.
+
+    Returns
+    -------
+    pd.DataFrame
+        A copy of the DataFrame with the specified values remapped.
+
+    Raises
+    ------
+    ValueError
+        If ``column`` is not present in ``df``, or if ``query`` is invalid.
+
+    Examples
+    --------
+    Override the session label for a single subject that was mis-remapped::
+
+        remap_values(
+            df,
+            [{"query": "subject == 'sub01'", "column": "session", "value": "6m"}],
+        )
+    """
+    df = df.copy()
+    for spec in remap_specs:
+        query = spec["query"]
+        column = spec["column"]
+        value = spec["value"]
+
+        if column not in df.columns:
+            raise ValueError(
+                f"remap_values: column '{column}' not found in dataframe. "
+                f"Available columns: {list(df.columns)}"
+            )
+
+        try:
+            matching_idx = df.query(query).index
+        except Exception as exc:
+            raise ValueError(f"remap_values: invalid query '{query}': {exc}") from exc
+
+        df.loc[matching_idx, column] = value
+
+    return df
+
+
 def post_filter(df, post_filter_specs):
     if not post_filter_specs:
         return df
@@ -339,6 +402,11 @@ def post_filter(df, post_filter_specs):
             reference_format=remap_config.get("reference_format", "%Y%m%d"),
             zero_pad=remap_config.get("zero_pad", False),
         )
+
+    # Apply manual value remapping if configured (runs after remap_sessions_by_date)
+    remap_values_specs = post_filter_specs.get("remap_values")
+    if remap_values_specs:
+        df = remap_values(df, remap_values_specs)
 
     for q in post_filter_specs.get("exclude_post_remap") or []:
         df = df.query(f"not ({q})")
