@@ -33,6 +33,7 @@ study_filter_specs:
     - "subject.str.contains('145M')"
     - "subject.str.contains('135M')"
     - "subject.str.contains('148M')"
+    - StudyInstanceUID == '2.16.756.5.5.200.8323328.3429.1752152862.8' #exclude 159BM4 20250710 scan (was re-done the day after)
 
 
   remap_sessions_by_date:
@@ -71,7 +72,18 @@ study_filter_specs:
       3: '9m'
       6: '12m'
       10: '16m'
- 
+
+  remap_values:
+    - query: "subject.str.startswith('05F') and StudyDate == 20251030"
+      column: session
+      value: '9m'
+    - query: "subject.str.startswith('05F') and StudyDate == 20260128"
+      column: session
+      value: '12m'
+    - query: "subject.str.startswith('05F') and StudyDate == 20260601"
+      column: session
+      value: '16m'
+
 # 3. download
 cfmm2tar_download_options: '--skip-derived'
 merge_duplicate_studies: False  
