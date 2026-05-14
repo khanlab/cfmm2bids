@@ -212,7 +212,21 @@ class TestCopyFromPath:
             "subject": "01",
             "session": "pre",
         }
-        with pytest.raises(ValueError, match="cannot include '\\.\\.'"):
+        with pytest.raises(ValueError, match=r"cannot include '\.\.'"):
+            copy_from_path(session_dir, spec)
+
+    def test_copy_from_path_rejects_relative_src(self, tmp_path):
+        """Test that source path must be absolute."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": "offline/file_{subject}.nii.gz",
+            "dst": "dwi/sub-{subject}_ses-{session}_dwi.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="must be an absolute path"):
             copy_from_path(session_dir, spec)
 
 

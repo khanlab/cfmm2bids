@@ -65,6 +65,7 @@ if fixes is not None:
                 }
                 added = func(dst, session_fix)
                 num_changes += added
+                logger.info(f"  session handler returned: {added}")
             else:
                 pattern = fix.get("pattern")
                 if not pattern:

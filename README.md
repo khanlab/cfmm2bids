@@ -369,7 +369,7 @@ session directory. Session-scoped fixes such as `copy_from_path` do not use
 `src` and `dst`, then expand glob wildcards in `src`. Globs follow shell-style
 rules (`*`, `?`, `[abc]`/`[0-9]`), and recursive matching requires `**`. Curly
 braces are reserved for `{subject}` and `{session}` template variables (literal
-brace matching is not supported).
+brace matching is not supported). `src` should be an absolute path.
 
 ### Other Options
 - `final_bids_dir`: Final output directory (default: `bids`)

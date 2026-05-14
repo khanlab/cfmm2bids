@@ -93,12 +93,19 @@ def copy_from_path(session_dir: Path, spec: dict) -> int:
 
     if not src_template or not dst_template:
         raise ValueError("copy_from_path requires both 'src' and 'dst'")
+    if "{subject}" in (src_template + dst_template) and not subject:
+        raise ValueError("copy_from_path requires 'subject' for templated src/dst")
+    if "{session}" in (src_template + dst_template) and not session:
+        raise ValueError("copy_from_path requires 'session' for templated src/dst")
 
     try:
         src_pattern = src_template.format(subject=subject, session=session)
         dst_rel = Path(dst_template.format(subject=subject, session=session))
     except KeyError as exc:
         raise ValueError(f"copy_from_path template key missing: {exc}") from exc
+
+    if not Path(src_pattern).is_absolute():
+        raise ValueError("copy_from_path 'src' must be an absolute path")
 
     if dst_rel.is_absolute():
         raise ValueError(
