@@ -12,8 +12,9 @@ import logging
 import re
 import shutil
 from collections.abc import Callable
+from glob import glob
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import nibabel as nib
 import numpy as np
@@ -24,22 +25,29 @@ logger = logging.getLogger(__name__)
 FIX_REGISTRY: dict[str, dict[str, Any]] = {}
 
 
-def register_fix(name: str | None = None, grouped: bool = False):
+def register_fix(
+    name: str | None = None,
+    grouped: bool = False,
+    scope: Literal["path", "session"] = "path",
+):
     """Decorator to register a fix function.
 
     Stored metadata (FIX_REGISTRY[name]):
       {
         "func": <callable>,
-        "grouped": bool
+        "grouped": bool,
+        "scope": "path" | "session",
       }
 
     grouped=True -> runner should call func(list_of_paths, ctx)
     grouped=False -> runner should call func(path, ctx) for each match
     """
+    if scope not in {"path", "session"}:
+        raise ValueError(f"Invalid fix scope: {scope}")
 
     def decorator(func: Callable):
         fix_name = name or func.__name__
-        meta = {"func": func, "grouped": bool(grouped)}
+        meta = {"func": func, "grouped": bool(grouped), "scope": scope}
         FIX_REGISTRY[fix_name] = meta
         return func
 
@@ -69,6 +77,111 @@ def update_json(path: Path, spec: dict) -> bool:
         json.dump(data, f, indent=2)
         f.write("\n")
     return True
+
+
+@register_fix("copy_from_path", scope="session")
+def copy_from_path(session_dir: Path, spec: dict) -> int:
+    """Copy one file from a globbed custom source path into the BIDS session directory.
+
+    Uses shell-style glob syntax in ``src`` (`*`, `?`, `[abc]`, `**`).
+    Recursive matching requires ``**`` in the source pattern.
+    ``src``/``dst`` can each be either a single string or a list of strings.
+    Lists are processed as zipped pairs.
+    """
+    subject = str(spec.get("subject", ""))
+    session = str(spec.get("session", ""))
+
+    src_template = spec.get("src", "")
+    dst_template = spec.get("dst", "")
+    required = bool(spec.get("required", True))
+
+    if not src_template or not dst_template:
+        raise ValueError("copy_from_path requires both 'src' and 'dst'")
+    if isinstance(src_template, list) != isinstance(dst_template, list):
+        raise ValueError(
+            "copy_from_path 'src' and 'dst' must both be strings or both be lists"
+        )
+
+    if isinstance(src_template, str):
+        src_templates = [src_template]
+    elif isinstance(src_template, list) and all(
+        isinstance(item, str) for item in src_template
+    ):
+        src_templates = src_template
+    else:
+        raise ValueError("copy_from_path 'src' must be a string or list of strings")
+
+    if isinstance(dst_template, str):
+        dst_templates = [dst_template]
+    elif isinstance(dst_template, list) and all(
+        isinstance(item, str) for item in dst_template
+    ):
+        dst_templates = dst_template
+    else:
+        raise ValueError("copy_from_path 'dst' must be a string or list of strings")
+
+    if len(src_templates) != len(dst_templates):
+        raise ValueError(
+            "copy_from_path requires 'src' and 'dst' lists to have the same length"
+        )
+
+    operations: list[tuple[Path, Path]] = []
+    for one_src_template, one_dst_template in zip(
+        src_templates, dst_templates, strict=True
+    ):
+        if (
+            "{subject}" in one_src_template or "{subject}" in one_dst_template
+        ) and not subject:
+            raise ValueError("copy_from_path requires 'subject' for templated src/dst")
+        if (
+            "{session}" in one_src_template or "{session}" in one_dst_template
+        ) and not session:
+            raise ValueError("copy_from_path requires 'session' for templated src/dst")
+
+        try:
+            src_pattern = one_src_template.format(subject=subject, session=session)
+            dst_rel = Path(one_dst_template.format(subject=subject, session=session))
+        except KeyError as exc:
+            raise ValueError(f"copy_from_path template key missing: {exc}") from exc
+
+        if not Path(src_pattern).is_absolute():
+            raise ValueError("copy_from_path 'src' must be an absolute path")
+
+        if dst_rel.is_absolute():
+            raise ValueError(
+                "copy_from_path 'dst' must be relative to the session directory"
+            )
+        if ".." in dst_rel.parts:
+            raise ValueError("copy_from_path 'dst' cannot include '..' path segments")
+
+        matches = sorted(glob(src_pattern, recursive=True))
+        if len(matches) == 0:
+            msg = f"copy_from_path: no matches for source pattern: {src_pattern}"
+            if required:
+                raise FileNotFoundError(msg)
+            logger.warning(msg)
+            continue
+
+        if len(matches) > 1:
+            raise ValueError(
+                f"copy_from_path expected 1 match for '{src_pattern}', got {len(matches)}"
+            )
+
+        src_path = Path(matches[0])
+        dst_path = session_dir / dst_rel
+        resolved_dst = dst_path.resolve()
+        resolved_session = session_dir.resolve()
+        if not resolved_dst.is_relative_to(resolved_session):
+            raise ValueError("copy_from_path destination escapes the session directory")
+
+        operations.append((src_path, dst_path))
+
+    for src_path, dst_path in operations:
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_path, dst_path)
+        logger.info(f"copy_from_path: copied {src_path} -> {dst_path}")
+
+    return len(operations)
 
 
 def _find_bids_root(path: Path) -> Path | None:

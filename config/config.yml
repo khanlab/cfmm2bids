@@ -242,11 +242,16 @@ study_filter_specs:
     # units: 'months'
 
     # Rounding step for time intervals (OPTIONAL, default: 6)
+    # Can be a single number (evenly-spaced steps) or a list of specific timepoints.
     # For example, with units='months' and round_step=6:
     #   - 0-3 months → 0m
     #   - 3-9 months → 6m
     #   - 9-15 months → 12m
     # round_step: 6
+    #
+    # Or, to handle unequally-spaced timepoints, provide an explicit list:
+    # round_step: [0, 3, 6, 10]
+    # Each value is snapped to the nearest timepoint in the list.
 
     # Zero-pad session labels (OPTIONAL, default: false)
     # If true, pads session labels with leading zeros to the width of the largest number.
@@ -372,6 +377,24 @@ post_convert_fixes:
   #   pattern: "fmap/*.json"
   #   action: intended_for
   #   target_pattern: "func/*bold.nii.gz"
+
+  # Example 7: Import an offline/generated file into BIDS
+  #   Runs once per subject/session (no pattern needed), formats placeholders,
+  #   then expands glob wildcards in src.
+  # - name: import_sp2d_dwi
+  #   action: copy_from_path
+  #   src: "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+  #   dst: "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
+  #   required: true
+  #   # optional: src/dst can also be lists (zipped by index), e.g. for .nii.gz/.bval/.bvec
+  #   # src:
+  #   #   - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+  #   #   - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.bval"
+  #   #   - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.bvec"
+  #   # dst:
+  #   #   - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
+  #   #   - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bval"
+  #   #   - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bvec"
 
 # Lines to add to the .bidsignore file
 # bidsignore:

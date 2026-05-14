@@ -1,8 +1,14 @@
 """Tests for query_filter module."""
 
 import pandas as pd
+import pytest
 
-from workflow.lib.query_filter import query_dicoms
+from workflow.lib.query_filter import (
+    post_filter,
+    query_dicoms,
+    remap_sessions_by_date,
+    remap_values,
+)
 
 
 class TestMetadataMappingsConstant:
@@ -579,3 +585,239 @@ class TestMetadataMappingsDerivedSource:
 
         assert len(result_df) == 3
         assert all(result_df["session"] == "15T")
+
+
+class TestRemapSessionsByDateRoundStep:
+    """Tests for remap_sessions_by_date with scalar and list round_step."""
+
+    def _make_df(self, subjects, sessions):
+        return pd.DataFrame({"subject": subjects, "session": sessions})
+
+    def test_scalar_round_step_evenly_spaced(self):
+        """Scalar round_step snaps to nearest multiple (existing behaviour)."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub01"],
+            ["20200101", "20200701", "20210101"],
+        )
+        result = remap_sessions_by_date(df, round_step=6)
+        sessions = list(result["session"])
+        assert sessions[0] == "0m"
+        assert sessions[1] == "6m"
+        assert sessions[2] == "12m"
+
+    def test_list_round_step_equally_spaced(self):
+        """List round_step with equal spacing matches scalar behaviour."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub01"],
+            ["20200101", "20200701", "20210101"],
+        )
+        result_scalar = remap_sessions_by_date(df, round_step=6)
+        result_list = remap_sessions_by_date(df, round_step=[0, 6, 12, 18])
+        assert list(result_scalar["session"]) == list(result_list["session"])
+
+    def test_list_round_step_unequal_spacing(self):
+        """List round_step correctly snaps to nearest unequally-spaced breakpoint."""
+        # Sessions at 0, ~3, ~6, ~10 months
+        df = self._make_df(
+            ["sub01", "sub01", "sub01", "sub01"],
+            ["20200101", "20200401", "20200701", "20201101"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 3, 6, 10])
+        sessions = list(result["session"])
+        assert sessions[0] == "0m"
+        assert sessions[1] == "3m"
+        assert sessions[2] == "6m"
+        assert sessions[3] == "10m"
+
+    def test_list_round_step_midpoint_snaps_to_nearest(self):
+        """A value exactly between two breakpoints snaps to the nearest one."""
+        # ~4.5 months since baseline – equidistant between 3 and 6, numpy picks lower index
+        df = self._make_df(
+            ["sub01", "sub01"],
+            ["20200101", "20200615"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 3, 6, 10])
+        # ~5.5 months → closer to 6
+        assert result["session"].iloc[1] == "6m"
+
+    def test_list_round_step_custom_time_to_label(self):
+        """Custom time_to_label still works when list round_step is used."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub01"],
+            ["20200101", "20200401", "20200701"],
+        )
+        result = remap_sessions_by_date(
+            df,
+            round_step=[0, 3, 6],
+            time_to_label={0: "baseline", 3: "3mo", 6: "6mo"},
+        )
+        sessions = list(result["session"])
+        assert sessions[0] == "baseline"
+        assert sessions[1] == "3mo"
+        assert sessions[2] == "6mo"
+
+    def test_list_round_step_single_subject_multiple_sessions(self):
+        """List round_step handles multiple sessions for one subject correctly."""
+        df = self._make_df(
+            ["sub01"] * 4,
+            ["20200101", "20200401", "20200701", "20201101"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 3, 6, 10])
+        assert list(result["session"]) == ["0m", "3m", "6m", "10m"]
+
+    def test_list_round_step_multiple_subjects(self):
+        """List round_step handles multiple subjects independently."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub02", "sub02"],
+            ["20200101", "20201101", "20190601", "20191201"],
+        )
+        result = remap_sessions_by_date(df, round_step=[0, 6])
+        # Each subject starts at 0; second session ~10 months → snaps to 6
+        for _, grp in result.groupby("subject"):
+            sessions = list(grp["session"])
+            assert sessions[0] == "0m"
+            assert sessions[1] == "6m"
+
+    @pytest.mark.parametrize("step_input", [[0, 6], (0, 6)])
+    def test_list_or_tuple_accepted(self, step_input):
+        """Both list and tuple are accepted as round_step."""
+        df = self._make_df(["sub01", "sub01"], ["20200101", "20200701"])
+        result = remap_sessions_by_date(df, round_step=step_input)
+        assert list(result["session"]) == ["0m", "6m"]
+
+
+class TestRemapValues:
+    """Tests for remap_values: manual column-value overrides."""
+
+    def _make_df(self, subjects, sessions):
+        return pd.DataFrame({"subject": subjects, "session": sessions})
+
+    def test_remap_single_row_by_subject_query(self):
+        """Remap the session for a single subject matched by query."""
+        df = self._make_df(["sub01", "sub02", "sub03"], ["6m", "3m", "6m"])
+        result = remap_values(
+            df, [{"query": "subject == 'sub02'", "column": "session", "value": "6m"}]
+        )
+        assert list(result["session"]) == ["6m", "6m", "6m"]
+
+    def test_remap_multiple_specs(self):
+        """Multiple remap_values specs are applied in order."""
+        df = self._make_df(["sub01", "sub02"], ["wrong1", "wrong2"])
+        specs = [
+            {"query": "subject == 'sub01'", "column": "session", "value": "0m"},
+            {"query": "subject == 'sub02'", "column": "session", "value": "6m"},
+        ]
+        result = remap_values(df, specs)
+        assert list(result["session"]) == ["0m", "6m"]
+
+    def test_remap_non_session_column(self):
+        """remap_values works on columns other than 'session'."""
+        df = pd.DataFrame(
+            {
+                "subject": ["sub01", "sub02"],
+                "session": ["0m", "6m"],
+                "group": ["A", "A"],
+            }
+        )
+        result = remap_values(
+            df, [{"query": "subject == 'sub02'", "column": "group", "value": "B"}]
+        )
+        assert list(result["group"]) == ["A", "B"]
+
+    def test_remap_with_no_matching_rows(self):
+        """A query that matches no rows leaves the dataframe unchanged."""
+        df = self._make_df(["sub01", "sub02"], ["0m", "6m"])
+        result = remap_values(
+            df, [{"query": "subject == 'sub99'", "column": "session", "value": "12m"}]
+        )
+        assert list(result["session"]) == ["0m", "6m"]
+
+    def test_remap_invalid_column_raises(self):
+        """Referencing a non-existent column raises ValueError."""
+        df = self._make_df(["sub01"], ["0m"])
+        with pytest.raises(ValueError, match="column 'nonexistent'"):
+            remap_values(
+                df,
+                [
+                    {
+                        "query": "subject == 'sub01'",
+                        "column": "nonexistent",
+                        "value": "x",
+                    }
+                ],
+            )
+
+    def test_remap_invalid_query_raises(self):
+        """An invalid query string raises ValueError."""
+        df = self._make_df(["sub01"], ["0m"])
+        with pytest.raises(ValueError, match="invalid query"):
+            remap_values(
+                df,
+                [
+                    {
+                        "query": "this is not valid @@@ python",
+                        "column": "session",
+                        "value": "x",
+                    }
+                ],
+            )
+
+    def test_original_df_not_mutated(self):
+        """remap_values does not mutate the input DataFrame."""
+        df = self._make_df(["sub01"], ["0m"])
+        original_session = df["session"].iloc[0]
+        remap_values(
+            df, [{"query": "subject == 'sub01'", "column": "session", "value": "6m"}]
+        )
+        assert df["session"].iloc[0] == original_session
+
+
+class TestPostFilterRemapValues:
+    """Integration tests for remap_values inside post_filter."""
+
+    def _make_df(self, subjects, sessions):
+        return pd.DataFrame({"subject": subjects, "session": sessions})
+
+    def test_remap_values_applied_after_remap_sessions_by_date(self):
+        """remap_values runs after remap_sessions_by_date, allowing manual correction."""
+        df = self._make_df(
+            ["sub01", "sub01", "sub02"],
+            ["20200101", "20200701", "20200101"],
+        )
+        post_filter_specs = {
+            "remap_sessions_by_date": {
+                "enable": True,
+                "units": "months",
+                "round_step": 6,
+            },
+            "remap_values": [
+                # sub02 was incorrectly mapped to 0m; override to 6m
+                {"query": "subject == 'sub02'", "column": "session", "value": "6m"}
+            ],
+        }
+        result = post_filter(df, post_filter_specs)
+        sub01 = result[result["subject"] == "sub01"]["session"].tolist()
+        sub02 = result[result["subject"] == "sub02"]["session"].tolist()
+        assert sub01 == ["0m", "6m"]
+        assert sub02 == ["6m"]
+
+    def test_remap_values_without_remap_sessions_by_date(self):
+        """remap_values works standalone without remap_sessions_by_date."""
+        df = self._make_df(["sub01", "sub02"], ["wrong", "ok"])
+        post_filter_specs = {
+            "remap_values": [
+                {
+                    "query": "subject == 'sub01'",
+                    "column": "session",
+                    "value": "corrected",
+                }
+            ]
+        }
+        result = post_filter(df, post_filter_specs)
+        assert list(result["session"]) == ["corrected", "ok"]
+
+    def test_no_remap_values_key_leaves_df_unchanged(self):
+        """Omitting remap_values from specs leaves the DataFrame unchanged."""
+        df = self._make_df(["sub01"], ["0m"])
+        result = post_filter(df, {"include": [], "exclude": []})
+        assert list(result["session"]) == ["0m"]

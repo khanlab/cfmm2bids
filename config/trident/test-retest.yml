@@ -1,53 +1,30 @@
 # general 
 credentials_file: ~/.uwo_credentials.bd
-final_bids_dir: "/nfs/trident3/mri/prado/vaccine/bids"
+final_bids_dir: "/nfs/trident3/mri/khan/testretest"
 
 # 1. query
 search_specs:
   - dicom_query:
-      study_description:  "*VaccIBV"
-      study_date: 20250405-
+      study_description:  "Khan^MouseMIND" #placeholder, need to add in correct name
+      study_date: 20260129-20260226
     metadata_mappings:
       subject:
         source: PatientName
         pattern: '(AS[a-z0-9A-Z]+)$'
-        sanitize: true
+        sanitize: false
         # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
 
       session:
         source: StudyDate
-        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
-  
-  - dicom_query:
-      study_description:  "*VaccIBV"
-      study_date: 20250401-20250404 #these started at session 3 (12m), without previous scans
-    metadata_mappings:
-      subject:
-        source: PatientName
-        pattern: '(AS[a-z0-9A-Z]+)$'
-        sanitize: true
-        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
-        premap:
-          177M2: AS177M2
-          177M3: AS177M3
-          177M4: AS177M4
-          176F1: AS176F1
-          176F5: AS176F5
-          176F6: AS176F6
-          176F7: AS176F7
 
-      session:
-        source: StudyDate
-        constant: '12m'  # Use constant value for all sessions (OPTIONAL)
   
+
+
+
  
 query_kwargs:
   additional_tags:
-#    "00100030": PatientBirthDate
- 
-query_kwargs:
-  additional_tags:
-#    "00100030": PatientBirthDate
+ #   "00100030": PatientBirthDate
   
 
 
@@ -55,18 +32,18 @@ query_kwargs:
 study_filter_specs:
   include:
   exclude:
+    - "subject != subject"                  # Exclude if subject is NaN
   remap_sessions_by_date:
     # Enable/disable session remapping (REQUIRED if section is present)
     enable: true
     # Time units for intervals (OPTIONAL, default: 'months')
     # Options: 'days', 'months', 'years'
-    units: 'months'
+    units: 'days'
     
     # Rounding step for time intervals (OPTIONAL, default: 6)
     # For example, with units='months' and round_step=1:
     #   - Sessions will be labeled by rounded month intervals (0m, 1m, 2m, etc.)
-    # Can also be a list for unequally-spaced timepoints, e.g. round_step: [0, 3, 6, 10]
-    round_step: 3
+    round_step: 14
     
     # Zero-pad session labels (OPTIONAL, default: false)
     # If true, pads session labels with leading zeros for proper alphanumeric sorting
@@ -83,9 +60,11 @@ study_filter_specs:
     # If not specified, generates labels like '0m', '6m', '12m' automatically
     # Custom mapping example (e.g., for time since baseline):
     time_to_label:
-      0: '06m'
-      3: '09m'
-      6: '12m'
+      0: '00d'
+      1: '14d'
+      2: '28d'
+      3: '42d'
+      4: '56d'
  
 # 3. download
 cfmm2tar_download_options: '--skip-derived'
@@ -115,16 +94,25 @@ post_convert_fixes:
 
 #intermediate output folders
 stages:
-  query: "results/vaccine/0_query"
-  filter: "results/vaccine/1_filter"
-  download: "results/vaccine/2_download"
-  convert: "results/vaccine/3_convert"
-  fix: "results/vaccine/4_fix"
+  query: "results/test-retest/0_query"
+  filter: "results/test-retest/1_filter"
+  download: "results/test-retest/2_download"
+  convert: "results/test-retest/3_convert"
+  fix: "results/test-retest/4_fix"
 
+ 
 # Centralized download cache 
 # Downloads are cached by StudyInstanceUID to avoid re-downloading
 # the same data when subject/session mappings differ
 # Default: "results/download_cache"
-download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
+download_cache: "results/download_cache"
+
+
+
+# EXTRA: Link to SPIM microscopy datasets
+link_to_spim: False
+
+#lightsheet bids data to link to
+#  indexed by session number, so different batches can use different sessions
 
 

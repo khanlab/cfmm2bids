@@ -210,7 +210,7 @@ def remap_sessions_by_date(
     original_session = df[session_col]
 
     # --- Parse session dates; non-parsable -> NaT ---
-    if not np.issubdtype(df[session_col].dtype, np.datetime64):
+    if not pd.api.types.is_datetime64_any_dtype(df[session_col]):
         session_date = pd.to_datetime(
             df[session_col],
             format=session_format,
@@ -240,7 +240,7 @@ def remap_sessions_by_date(
         if reference_col not in df.columns:
             raise ValueError(f"reference_col '{reference_col}' not found in dataframe")
 
-        if not np.issubdtype(df[reference_col].dtype, np.datetime64):
+        if not pd.api.types.is_datetime64_any_dtype(df[reference_col]):
             ref_parsed = pd.to_datetime(
                 df[reference_col],
                 format=reference_format,
@@ -272,13 +272,22 @@ def remap_sessions_by_date(
     else:
         raise ValueError("units must be one of {'days', 'months', 'years'}")
 
-    time_rounded = (np.round(time_diff / round_step) * round_step).astype(float)
+    if isinstance(round_step, (list, tuple, np.ndarray)):
+        breakpoints = np.asarray(round_step, dtype=float)
+        diffs = np.abs(time_diff.values[:, np.newaxis] - breakpoints[np.newaxis, :])
+        nearest_idx = np.argmin(diffs, axis=1)
+        time_rounded = pd.Series(
+            breakpoints[nearest_idx], index=time_diff.index, dtype=float
+        )
+    else:
+        time_rounded = (np.round(time_diff / round_step) * round_step).astype(float)
 
     # Label mapping (custom first)
     if time_to_label is None:
         time_to_label = {}
 
-    time_label = time_rounded.map(time_to_label)
+    # Use object dtype to allow mixed NaN/string values regardless of pandas version
+    time_label = time_rounded.map(time_to_label).astype(object)
 
     # Fill unmapped finite values with default labels
     finite_mask = np.isfinite(time_rounded.to_numpy())
@@ -295,11 +304,75 @@ def remap_sessions_by_date(
         else:
             default_labels = rounded_int.astype(str) + units[0]
 
-        time_label.loc[finite_idx] = time_label.loc[finite_idx].fillna(default_labels)
+        unmapped = time_label.loc[finite_idx].isna()
+        time_label.loc[finite_idx[unmapped]] = default_labels.loc[finite_idx[unmapped]]
 
     # --- Write back only for rows we successfully processed; others stay original ---
     df[session_col] = original_session
     df.loc[time_label.index, session_col] = time_label
+
+    return df
+
+
+def remap_values(df, remap_specs):
+    """
+    Manually remap values in specific columns for rows matching a query.
+
+    This provides a way to manually correct remapping results (e.g. after
+    ``remap_sessions_by_date``) for individual subjects or rows where
+    automatic remapping produced an incorrect result.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame to remap.
+    remap_specs : list of dict
+        Each dict must have the following keys:
+
+        - ``query``: str – a pandas query string that selects the rows to
+          remap (passed to :meth:`pandas.DataFrame.query`).
+        - ``column``: str – the name of the column whose value should be
+          updated for matching rows.
+        - ``value``: scalar – the new value to assign to the column for all
+          matching rows.
+
+    Returns
+    -------
+    pd.DataFrame
+        A copy of the DataFrame with the specified values remapped.
+
+    Raises
+    ------
+    ValueError
+        If ``column`` is not present in ``df``, or if ``query`` is invalid.
+
+    Examples
+    --------
+    Override the session label for a single subject that was mis-remapped::
+
+        remap_values(
+            df,
+            [{"query": "subject == 'sub01'", "column": "session", "value": "6m"}],
+        )
+    """
+    df = df.copy()
+    for spec in remap_specs:
+        query = spec["query"]
+        column = spec["column"]
+        value = spec["value"]
+
+        if column not in df.columns:
+            raise ValueError(
+                f"remap_values: column '{column}' not found in dataframe. "
+                f"Available columns: {list(df.columns)}"
+            )
+
+        try:
+            matching_idx = df.query(query).index
+        except Exception as exc:
+            raise ValueError(f"remap_values: invalid query '{query}': {exc}") from exc
+
+        df.loc[matching_idx, column] = value
 
     return df
 
@@ -329,6 +402,11 @@ def post_filter(df, post_filter_specs):
             reference_format=remap_config.get("reference_format", "%Y%m%d"),
             zero_pad=remap_config.get("zero_pad", False),
         )
+
+    # Apply manual value remapping if configured (runs after remap_sessions_by_date)
+    remap_values_specs = post_filter_specs.get("remap_values")
+    if remap_values_specs:
+        df = remap_values(df, remap_values_specs)
 
     for q in post_filter_specs.get("exclude_post_remap") or []:
         df = df.query(f"not ({q})")
