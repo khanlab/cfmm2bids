@@ -14,7 +14,7 @@ import shutil
 from collections.abc import Callable
 from glob import glob
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import nibabel as nib
 import numpy as np
@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 FIX_REGISTRY: dict[str, dict[str, Any]] = {}
 
 
-def register_fix(name: str | None = None, grouped: bool = False, scope: str = "path"):
+def register_fix(
+    name: str | None = None,
+    grouped: bool = False,
+    scope: Literal["path", "session"] = "path",
+):
     """Decorator to register a fix function.
 
     Stored metadata (FIX_REGISTRY[name]):

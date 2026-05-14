@@ -367,7 +367,8 @@ For most fixes, `pattern` is required and matching files are searched in the BID
 session directory. Session-scoped fixes such as `copy_from_path` do not use
 `pattern`; they run once per subject/session, format `{subject}`/`{session}` in
 `src` and `dst`, then expand glob wildcards in `src`. Globs follow shell-style
-rules (`*`, `?`, `[0-9]`), and recursive matching requires `**`.
+rules (`*`, `?`, `[abc]`/`[0-9]`), and recursive matching requires `**`. Curly
+braces are reserved for `{subject}` and `{session}` template variables.
 
 ### Other Options
 - `final_bids_dir`: Final output directory (default: `bids`)

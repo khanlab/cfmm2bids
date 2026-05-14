@@ -69,7 +69,8 @@ if fixes is not None:
                 pattern = fix.get("pattern")
                 if not pattern:
                     raise ValueError(
-                        f"Fix '{name}' ({action}) requires a 'pattern' for path scope"
+                        f"Fix '{name}' ({action}) with scope 'path' requires a "
+                        "'pattern' field. Session-scoped fixes do not need pattern."
                     )
 
                 matches = list(dst.rglob(pattern))
