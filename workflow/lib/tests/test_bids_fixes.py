@@ -212,7 +212,7 @@ class TestCopyFromPath:
             "subject": "01",
             "session": "pre",
         }
-        with pytest.raises(ValueError, match=r"cannot include '\.\.'"):
+        with pytest.raises(ValueError, match="cannot include '..'"):
             copy_from_path(session_dir, spec)
 
     def test_copy_from_path_rejects_relative_src(self, tmp_path):
