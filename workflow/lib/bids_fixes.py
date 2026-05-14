@@ -12,6 +12,7 @@ import logging
 import re
 import shutil
 from collections.abc import Callable
+from glob import glob
 from pathlib import Path
 from typing import Any
 
@@ -24,13 +25,14 @@ logger = logging.getLogger(__name__)
 FIX_REGISTRY: dict[str, dict[str, Any]] = {}
 
 
-def register_fix(name: str | None = None, grouped: bool = False):
+def register_fix(name: str | None = None, grouped: bool = False, scope: str = "path"):
     """Decorator to register a fix function.
 
     Stored metadata (FIX_REGISTRY[name]):
       {
         "func": <callable>,
-        "grouped": bool
+        "grouped": bool,
+        "scope": "path" | "session",
       }
 
     grouped=True -> runner should call func(list_of_paths, ctx)
@@ -39,7 +41,7 @@ def register_fix(name: str | None = None, grouped: bool = False):
 
     def decorator(func: Callable):
         fix_name = name or func.__name__
-        meta = {"func": func, "grouped": bool(grouped)}
+        meta = {"func": func, "grouped": bool(grouped), "scope": scope}
         FIX_REGISTRY[fix_name] = meta
         return func
 
@@ -69,6 +71,56 @@ def update_json(path: Path, spec: dict) -> bool:
         json.dump(data, f, indent=2)
         f.write("\n")
     return True
+
+
+@register_fix("copy_from_path", scope="session")
+def copy_from_path(session_dir: Path, spec: dict) -> int:
+    """Copy one file from a globbed custom source path into the BIDS session directory."""
+    subject = str(spec.get("subject", ""))
+    session = str(spec.get("session", ""))
+
+    src_template = spec.get("src", "")
+    dst_template = spec.get("dst", "")
+    required = bool(spec.get("required", True))
+
+    if not src_template or not dst_template:
+        raise ValueError("copy_from_path requires both 'src' and 'dst'")
+
+    try:
+        src_pattern = src_template.format(subject=subject, session=session)
+        dst_rel = Path(dst_template.format(subject=subject, session=session))
+    except KeyError as exc:
+        raise ValueError(f"copy_from_path template key missing: {exc}") from exc
+
+    if dst_rel.is_absolute():
+        raise ValueError(
+            "copy_from_path 'dst' must be relative to the session directory"
+        )
+
+    matches = sorted(glob(src_pattern, recursive=True))
+    if len(matches) == 0:
+        msg = f"copy_from_path: no matches for source pattern: {src_pattern}"
+        if required:
+            raise FileNotFoundError(msg)
+        logger.warning(msg)
+        return 0
+
+    if len(matches) > 1:
+        raise ValueError(
+            f"copy_from_path expected 1 match for '{src_pattern}', got {len(matches)}"
+        )
+
+    src_path = Path(matches[0])
+    dst_path = session_dir / dst_rel
+    resolved_dst = dst_path.resolve()
+    resolved_session = session_dir.resolve()
+    if not resolved_dst.is_relative_to(resolved_session):
+        raise ValueError("copy_from_path destination escapes the session directory")
+
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src_path, dst_path)
+    logger.info(f"copy_from_path: copied {src_path} -> {dst_path}")
+    return 1
 
 
 def _find_bids_root(path: Path) -> Path | None:

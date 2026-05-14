@@ -355,7 +355,18 @@ post_convert_fixes:
     action: gen_mp2rage_uni_den
     multiplying_factor: 6   # optional, default 6 (range 1-10)
     output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename
+
+  - name: import_offline_sp2d
+    action: copy_from_path
+    src: "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+    dst: "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
+    required: true
 ```
+
+For most fixes, `pattern` is required and matching files are searched in the BIDS
+session directory. Session-scoped fixes such as `copy_from_path` do not use
+`pattern`; they run once per subject/session, format `{subject}`/`{session}` in
+`src` and `dst`, then expand glob wildcards in `src`.
 
 ### Other Options
 - `final_bids_dir`: Final output directory (default: `bids`)
@@ -628,4 +639,3 @@ Tests run automatically on every push and pull request via GitHub Actions:
 - Code formatting checks (ruff, snakefmt)
 - Unit tests
 - Integration tests (dry-run)
-

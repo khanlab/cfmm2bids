@@ -378,6 +378,15 @@ post_convert_fixes:
   #   action: intended_for
   #   target_pattern: "func/*bold.nii.gz"
 
+  # Example 7: Import an offline/generated file into BIDS
+  #   Runs once per subject/session (no pattern needed), formats placeholders,
+  #   then expands glob wildcards in src.
+  # - name: import_sp2d_dwi
+  #   action: copy_from_path
+  #   src: "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+  #   dst: "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
+  #   required: true
+
 # Lines to add to the .bidsignore file
 # bidsignore:
 #  -

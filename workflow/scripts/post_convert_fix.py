@@ -43,7 +43,6 @@ fixes_used = []
 if fixes is not None:
     for fix in fixes:
         name = fix.get("name", "unnamed_fix")
-        pattern = fix["pattern"]
         action = fix["action"]
 
         meta = bids_fixes.FIX_REGISTRY.get(action)
@@ -53,30 +52,47 @@ if fixes is not None:
 
         func = meta.get("func")
         grouped = bool(meta.get("grouped", False))
+        scope = meta.get("scope", "path")
 
         logger.info(f"\n=== Applying fix: {name} ({action}) ===")
-        matches = list(dst.rglob(pattern))
-        if not matches:
-            logger.info(f"  ⚠️ No matches for pattern: {pattern}")
-            continue
 
         try:
-            if grouped:
-                # pass the whole list of Path objects and the fix dict
-                added = func(matches, fix)
+            if scope == "session":
+                session_fix = {
+                    **fix,
+                    "subject": snakemake.wildcards.subject,
+                    "session": snakemake.wildcards.session,
+                }
+                added = func(dst, session_fix)
                 num_changes += added
-                logger.info(f"  grouped handler returned: {added}")
             else:
-                # per-file handler: call once per match
-                for path in matches:
-                    try:
-                        changed = func(path, fix)
-                    except Exception:
-                        logger.error(f"  Exception running handler for {path}:")
-                        logger.error(traceback.format_exc())
-                        changed = False
-                    if changed:
-                        num_changes += 1
+                pattern = fix.get("pattern")
+                if not pattern:
+                    raise ValueError(
+                        f"Fix '{name}' ({action}) requires a 'pattern' for path scope"
+                    )
+
+                matches = list(dst.rglob(pattern))
+                if not matches:
+                    logger.info(f"  ⚠️ No matches for pattern: {pattern}")
+                    continue
+
+                if grouped:
+                    # pass the whole list of Path objects and the fix dict
+                    added = func(matches, fix)
+                    num_changes += added
+                    logger.info(f"  grouped handler returned: {added}")
+                else:
+                    # per-file handler: call once per match
+                    for path in matches:
+                        try:
+                            changed = func(path, fix)
+                        except Exception:
+                            logger.error(f"  Exception running handler for {path}:")
+                            logger.error(traceback.format_exc())
+                            changed = False
+                        if changed:
+                            num_changes += 1
         except Exception:
             logger.error(f"  Exception running fix '{name}' ({action}):")
             logger.error(traceback.format_exc())
