@@ -386,6 +386,15 @@ post_convert_fixes:
   #   src: "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
   #   dst: "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
   #   required: true
+  #   # optional: src/dst can also be lists (zipped by index), e.g. for .nii.gz/.bval/.bvec
+  #   # src:
+  #   #   - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+  #   #   - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.bval"
+  #   #   - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.bvec"
+  #   # dst:
+  #   #   - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
+  #   #   - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bval"
+  #   #   - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bvec"
 
 # Lines to add to the .bidsignore file
 # bidsignore:

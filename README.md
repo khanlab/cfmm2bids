@@ -361,6 +361,18 @@ post_convert_fixes:
     src: "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
     dst: "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
     required: true
+
+  - name: import_offline_sp2d_bundle
+    action: copy_from_path
+    src:
+      - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+      - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.bval"
+      - "/path/to/recons/*_SNSX_{subject}/cb_sp2d_diff.bvec"
+    dst:
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bval"
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bvec"
+    required: true
 ```
 
 For most fixes, `pattern` is required and matching files are searched in the BIDS
@@ -370,7 +382,8 @@ session directory. Session-scoped fixes such as `copy_from_path` do not use
 rules (`*`, `?`, `[abc]`/`[0-9]`), and recursive matching requires `**`. Curly
 braces are reserved for `{subject}` and `{session}` template variables (literal
 brace matching is not supported; if needed, point `src` at a directory/symlink
-without braces). `src` should be an absolute path.
+without braces). `src` should be an absolute path. `src` and `dst` can each be
+either a string or a list of strings; list mode uses zipped `src[i] -> dst[i]`.
 
 ### Other Options
 - `final_bids_dir`: Final output directory (default: `bids`)

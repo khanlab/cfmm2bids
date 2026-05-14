@@ -229,6 +229,73 @@ class TestCopyFromPath:
         with pytest.raises(ValueError, match="must be an absolute path"):
             copy_from_path(session_dir, spec)
 
+    def test_copy_from_path_list_pairs(self, tmp_path):
+        """Test that src/dst lists are zipped and copied pairwise."""
+        source_root = tmp_path / "offline"
+        source_root.mkdir(parents=True)
+        (source_root / "cb_sp2d_diff.nii.gz").write_text("nii")
+        (source_root / "cb_sp2d_diff.bval").write_text("bval")
+        (source_root / "cb_sp2d_diff.bvec").write_text("bvec")
+
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": [
+                str(source_root / "cb_sp2d_diff.nii.gz"),
+                str(source_root / "cb_sp2d_diff.bval"),
+                str(source_root / "cb_sp2d_diff.bvec"),
+            ],
+            "dst": [
+                "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz",
+                "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bval",
+                "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bvec",
+            ],
+            "subject": "01",
+            "session": "pre",
+        }
+
+        result = copy_from_path(session_dir, spec)
+
+        assert result == 3
+        assert (
+            session_dir / "dwi" / "sub-01_ses-pre_acq-sp2d_dwi.nii.gz"
+        ).read_text() == "nii"
+        assert (
+            session_dir / "dwi" / "sub-01_ses-pre_acq-sp2d_dwi.bval"
+        ).read_text() == ("bval")
+        assert (
+            session_dir / "dwi" / "sub-01_ses-pre_acq-sp2d_dwi.bvec"
+        ).read_text() == ("bvec")
+
+    def test_copy_from_path_rejects_mismatched_src_dst_list_lengths(self, tmp_path):
+        """Test that src/dst lists must have matching lengths."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": [str(tmp_path / "one.nii.gz"), str(tmp_path / "two.nii.gz")],
+            "dst": ["dwi/sub-{subject}_ses-{session}_one.nii.gz"],
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="same length"):
+            copy_from_path(session_dir, spec)
+
+    def test_copy_from_path_rejects_mixed_src_dst_container_types(self, tmp_path):
+        """Test that src and dst must both be strings or both be lists."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": [str(tmp_path / "one.nii.gz")],
+            "dst": "dwi/sub-{subject}_ses-{session}_one.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="both be strings or both be lists"):
+            copy_from_path(session_dir, spec)
+
 
 class TestRemoveFile:
     """Tests for the remove_file fix function."""
