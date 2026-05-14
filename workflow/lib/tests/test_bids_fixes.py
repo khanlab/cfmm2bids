@@ -197,6 +197,24 @@ class TestCopyFromPath:
             session_dir / "custom" / "nested" / "sub-01_ses-pre_dwi.nii.gz"
         ).exists()
 
+    def test_copy_from_path_rejects_parent_traversal_in_dst(self, tmp_path):
+        """Test that destination path traversal is rejected."""
+        source_file = tmp_path / "offline" / "file_01.nii.gz"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text("test")
+
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": str(tmp_path / "offline" / "file_{subject}.nii.gz"),
+            "dst": "../outside/sub-{subject}_ses-{session}_dwi.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="cannot include '\\.\\.'"):
+            copy_from_path(session_dir, spec)
+
 
 class TestRemoveFile:
     """Tests for the remove_file fix function."""

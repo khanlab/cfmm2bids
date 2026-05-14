@@ -104,6 +104,8 @@ def copy_from_path(session_dir: Path, spec: dict) -> int:
         raise ValueError(
             "copy_from_path 'dst' must be relative to the session directory"
         )
+    if ".." in dst_rel.parts:
+        raise ValueError("copy_from_path 'dst' cannot include '..' path segments")
 
     matches = sorted(glob(src_pattern, recursive=True))
     if len(matches) == 0:
