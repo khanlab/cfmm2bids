@@ -75,7 +75,11 @@ def update_json(path: Path, spec: dict) -> bool:
 
 @register_fix("copy_from_path", scope="session")
 def copy_from_path(session_dir: Path, spec: dict) -> int:
-    """Copy one file from a globbed custom source path into the BIDS session directory."""
+    """Copy one file from a globbed custom source path into the BIDS session directory.
+
+    Uses shell-style glob syntax in ``src`` (`*`, `?`, `[abc]`, `**`).
+    Recursive matching requires ``**`` in the source pattern.
+    """
     subject = str(spec.get("subject", ""))
     session = str(spec.get("session", ""))
 

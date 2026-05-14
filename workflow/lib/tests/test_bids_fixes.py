@@ -80,6 +80,8 @@ class TestRegisterFix:
         assert "remove" in FIX_REGISTRY
         assert "update_json" in FIX_REGISTRY
         assert "copy_from_path" in FIX_REGISTRY
+        assert FIX_REGISTRY["copy_from_path"]["scope"] == "session"
+        assert FIX_REGISTRY["remove"]["scope"] == "path"
         assert "intended_for" in FIX_REGISTRY
         assert "fix_orientation_quadruped" in FIX_REGISTRY
         assert "remove_duplicate_niftis" in FIX_REGISTRY

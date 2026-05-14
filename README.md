@@ -366,7 +366,8 @@ post_convert_fixes:
 For most fixes, `pattern` is required and matching files are searched in the BIDS
 session directory. Session-scoped fixes such as `copy_from_path` do not use
 `pattern`; they run once per subject/session, format `{subject}`/`{session}` in
-`src` and `dst`, then expand glob wildcards in `src`.
+`src` and `dst`, then expand glob wildcards in `src`. Globs follow shell-style
+rules (`*`, `?`, `[0-9]`), and recursive matching requires `**`.
 
 ### Other Options
 - `final_bids_dir`: Final output directory (default: `bids`)
