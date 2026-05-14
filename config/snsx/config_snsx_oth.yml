@@ -605,6 +605,27 @@ post_convert_fixes:
     multiplying_factor: 6   # optional, default 6 (range 1-10)
     output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename
 
+  - name: import_sp2d_dwi
+    action: copy_from_path
+    src: 
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bvec"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bval"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bmat"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_slspec.txt"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_phase.nii.gz"
+    dst: 
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bvec"
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bval"
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bmat"
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.slspec.txt"
+      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_part-phase_dwi.nii.gz"
+    required: true
+
+
+
+
   # Additional fixes can be added below as needed.
   # Example 1: Remove unwanted files
   # - name: remove_unwanted_fieldmaps
