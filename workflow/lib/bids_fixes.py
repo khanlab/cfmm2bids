@@ -42,6 +42,8 @@ def register_fix(
     grouped=True -> runner should call func(list_of_paths, ctx)
     grouped=False -> runner should call func(path, ctx) for each match
     """
+    if scope not in {"path", "session"}:
+        raise ValueError(f"Invalid fix scope: {scope}")
 
     def decorator(func: Callable):
         fix_name = name or func.__name__
@@ -93,9 +95,9 @@ def copy_from_path(session_dir: Path, spec: dict) -> int:
 
     if not src_template or not dst_template:
         raise ValueError("copy_from_path requires both 'src' and 'dst'")
-    if "{subject}" in (src_template + dst_template) and not subject:
+    if ("{subject}" in src_template or "{subject}" in dst_template) and not subject:
         raise ValueError("copy_from_path requires 'subject' for templated src/dst")
-    if "{session}" in (src_template + dst_template) and not session:
+    if ("{session}" in src_template or "{session}" in dst_template) and not session:
         raise ValueError("copy_from_path requires 'session' for templated src/dst")
 
     try:
