@@ -587,7 +587,7 @@ rule gradcorrect:
         "ln -sr {input.bidsignore} bids_in/ &>> {log} && "
         "ln -sr {input.bids_subj_dir} "
         "bids_in/sub-{wildcards.subject}/ses-{wildcards.session} &>> {log} && "
-        "run.sh bids_in bids_out participant "
+        "/.run bids_in bids_out participant "
         "--grad_coeff_file {params.grad_coeff_file} &>> {log} && "
         "mkdir -p $(dirname {output.bids_subj_dir}) &>> {log} && "
         "mv bids_out/sub-{wildcards.subject}/ses-{wildcards.session} "
