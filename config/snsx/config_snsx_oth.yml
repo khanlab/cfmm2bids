@@ -12,8 +12,8 @@ credentials_file: ~/.uwo_credentials
 # Final output directory for the BIDS dataset (REQUIRED)
 # Absolute or relative paths can be used, will be relative to working folder
 # Default: "bids"
-final_bids_dir: "/nfs/khan/datasets/SNSX/OTH/bids"
-final_bids_uncorr_dir: "/nfs/khan/datasets/SNSX/OTH/bids_uncorr"
+final_bids_dir: "/nfs/snsx/bids/OTH/bids"
+final_bids_uncorr_dir: "/nfs/snsx/bids/OTH/bids_uncorr"
 
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
@@ -405,7 +405,7 @@ merge_duplicate_studies: true
 # Examples:
 #   heuristics/trident_15T.py
 #   heuristics/Menon_CogMSv2.py
-heuristic: heuristics/cfmm_base.py
+heuristic: heuristics/cfmm_snsx.py
 
 # Path to dcm2niix configuration file (REQUIRED)
 # Contains dcm2niix settings for DICOM to NIfTI conversion
@@ -615,12 +615,12 @@ post_convert_fixes:
       - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_slspec.txt"
       - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_phase.nii.gz"
     dst: 
-      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz"
-      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bvec"
-      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bval"
-      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bmat"
-      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.slspec.txt"
-      - "dwi/sub-{subject}_ses-{session}_acq-sp2d_part-phase_dwi.nii.gz"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.nii.gz"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bvec"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bval"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bmat"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.slspec.txt"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_part-phase_dwi.nii.gz"
     required: true
 
 
@@ -695,12 +695,12 @@ gradcorrect:
 # Default paths are shown below and are relative to the working directory.
 
 stages:
-  query: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/results/0_query"        # Query results (studies.tsv)
-  filter: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/1_filter"      # Filtered studies (studies_filtered.tsv)
-  download: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/2_download" # Downloaded DICOMs
-  convert: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/3_convert"    # Initial BIDS conversion + QC reports
-  fix: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/4_fix"            # Fixed BIDS dataset
-  gradcorr: "/nfs/khan/datasets/SNSX/cfmm2bids/results/OTH/5_gradcorr"            # corr BIDS dataset
+  query: "/nfs/snsx/sourcedata/cfmm2bids/results/OTH/results/0_query"        # Query results (studies.tsv)
+  filter: "/nfs/snsx/sourcedata/cfmm2bids/results/OTH/1_filter"      # Filtered studies (studies_filtered.tsv)
+  download: "/nfs/snsx/sourcedata/cfmm2bids/results/OTH/2_download" # Downloaded DICOMs
+  convert: "/nfs/snsx/sourcedata/cfmm2bids/results/OTH/3_convert"    # Initial BIDS conversion + QC reports
+  fix: "/nfs/snsx/sourcedata/cfmm2bids/results/OTH/4_fix"            # Fixed BIDS dataset
+  gradcorr: "/nfs/snsx/sourcedata/cfmm2bids/results/OTH/5_gradcorr"            # corr BIDS dataset
 
 
 
@@ -708,7 +708,7 @@ stages:
 # Downloads are cached by StudyInstanceUID to avoid re-downloading
 # the same data when subject/session mappings differ
 # Default: "results/download_cache"
-download_cache: "/nfs/khan/datasets/SNSX/cfmm2bids/results/download_cache"
+download_cache: "/nfs/snsx/sourcedata/cfmm2bids/results/download_cache"
 
 
 
