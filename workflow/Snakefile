@@ -578,7 +578,7 @@ rule gradcorrect:
         mem_mb=40000,
         runtime=240,
     container:
-        "docker://khanlab/gradcorrect:v0.0.3a"
+        "docker://khanlab/gradcorrect:v0.1.0"
     shadow:
         "minimal"
     shell:
