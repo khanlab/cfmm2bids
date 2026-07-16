@@ -663,7 +663,10 @@ bidsignore:
   - '*_b1DivImg.*'
   - '*_TB1Map.*'
   - '*echo*T1map.*'
-
+  - '*.bmat'
+  - '*part-phase_dwi.nii.gz'
+  - '*.slspec.txt'
+  - '*_PDT2.*'
 # ============================================================================
 # 6. GRADCORRECT STAGE - Gradient nonlinearity correction (OPTIONAL)
 # ============================================================================
