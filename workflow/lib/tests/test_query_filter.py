@@ -1,5 +1,6 @@
 """Tests for query_filter module."""
 
+import os
 import time
 
 import pandas as pd
@@ -52,8 +53,6 @@ class TestShouldSkipQuery:
     def test_requery_when_tsv_older_than_one_day(self, tmp_path):
         tsv, hash_file = self._write_files(tmp_path, "abc123")
         # Set mtime to more than one day ago
-        import os
-
         old_time = time.time() - QUERY_CACHE_MAX_AGE_SECONDS - 1
         os.utime(tsv, (old_time, old_time))
         assert should_skip_query(tsv, hash_file, "abc123") is False
@@ -61,8 +60,6 @@ class TestShouldSkipQuery:
     def test_skips_when_tsv_just_within_one_day(self, tmp_path):
         tsv, hash_file = self._write_files(tmp_path, "abc123")
         # Set mtime to just under one day ago (1 second under the limit)
-        import os
-
         fresh_time = time.time() - QUERY_CACHE_MAX_AGE_SECONDS + 1
         os.utime(tsv, (fresh_time, fresh_time))
         assert should_skip_query(tsv, hash_file, "abc123") is True
