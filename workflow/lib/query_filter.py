@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,9 @@ def compute_query_hash(search_specs, query_kwargs=None):
     return hashlib.sha256(params_json.encode()).hexdigest()
 
 
+QUERY_CACHE_MAX_AGE_SECONDS = 86400  # 1 day
+
+
 def should_skip_query(
     query_tsv_path, query_hash_path, current_hash, force_requery=False
 ):
@@ -47,7 +51,8 @@ def should_skip_query(
     The query can be skipped if:
     1. The query TSV file already exists
     2. The hash file exists and matches the current hash
-    3. force_requery is not set
+    3. The query TSV file is not older than one day
+    4. force_requery is not set
 
     Parameters
     ----------
@@ -72,6 +77,13 @@ def should_skip_query(
         return False
 
     if not query_hash_path.exists():
+        return False
+
+    try:
+        tsv_age = time.time() - query_tsv_path.stat().st_mtime
+        if tsv_age > QUERY_CACHE_MAX_AGE_SECONDS:
+            return False
+    except OSError:
         return False
 
     try:

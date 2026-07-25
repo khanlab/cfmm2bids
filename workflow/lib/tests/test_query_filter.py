@@ -1,14 +1,68 @@
 """Tests for query_filter module."""
 
+import os
+import time
+
 import pandas as pd
 import pytest
 
 from workflow.lib.query_filter import (
+    QUERY_CACHE_MAX_AGE_SECONDS,
     post_filter,
     query_dicoms,
     remap_sessions_by_date,
     remap_values,
+    should_skip_query,
 )
+
+
+class TestShouldSkipQuery:
+    """Tests for should_skip_query cache-skip logic."""
+
+    def _write_files(self, tmp_path, hash_value="abc123"):
+        tsv = tmp_path / "studies.tsv"
+        hash_file = tmp_path / "query_hash.txt"
+        tsv.write_text("col1\tcol2\n")
+        hash_file.write_text(hash_value)
+        return tsv, hash_file
+
+    def test_skips_when_fresh_and_hash_matches(self, tmp_path):
+        tsv, hash_file = self._write_files(tmp_path, "abc123")
+        assert should_skip_query(tsv, hash_file, "abc123") is True
+
+    def test_requery_when_hash_differs(self, tmp_path):
+        tsv, hash_file = self._write_files(tmp_path, "abc123")
+        assert should_skip_query(tsv, hash_file, "different_hash") is False
+
+    def test_requery_when_tsv_missing(self, tmp_path):
+        tsv = tmp_path / "studies.tsv"
+        hash_file = tmp_path / "query_hash.txt"
+        hash_file.write_text("abc123")
+        assert should_skip_query(tsv, hash_file, "abc123") is False
+
+    def test_requery_when_hash_file_missing(self, tmp_path):
+        tsv = tmp_path / "studies.tsv"
+        tsv.write_text("col1\n")
+        hash_file = tmp_path / "query_hash.txt"
+        assert should_skip_query(tsv, hash_file, "abc123") is False
+
+    def test_requery_when_force_requery(self, tmp_path):
+        tsv, hash_file = self._write_files(tmp_path, "abc123")
+        assert should_skip_query(tsv, hash_file, "abc123", force_requery=True) is False
+
+    def test_requery_when_tsv_older_than_one_day(self, tmp_path):
+        tsv, hash_file = self._write_files(tmp_path, "abc123")
+        # Set mtime to more than one day ago
+        old_time = time.time() - QUERY_CACHE_MAX_AGE_SECONDS - 1
+        os.utime(tsv, (old_time, old_time))
+        assert should_skip_query(tsv, hash_file, "abc123") is False
+
+    def test_skips_when_tsv_just_within_one_day(self, tmp_path):
+        tsv, hash_file = self._write_files(tmp_path, "abc123")
+        # Set mtime to just under one day ago (1 second under the limit)
+        fresh_time = time.time() - QUERY_CACHE_MAX_AGE_SECONDS + 1
+        os.utime(tsv, (fresh_time, fresh_time))
+        assert should_skip_query(tsv, hash_file, "abc123") is True
 
 
 class TestMetadataMappingsConstant:
