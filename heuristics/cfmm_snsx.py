@@ -228,7 +228,7 @@ def infotodict(seqinfo):
 
     # Diffusion
     dwi = create_key(
-        "{bids_subject_session_dir}/dwi/{bids_subject_session_prefix}_run-{item:01d}_dwi"
+        "{bids_subject_session_dir}/dwi/{bids_subject_session_prefix}_acq-lte_run-{item:01d}_dwi"
     )
 
     # uFA
@@ -236,7 +236,7 @@ def infotodict(seqinfo):
         "{bids_subject_session_dir}/dwi/{bids_subject_session_prefix}_acq-uFA_run-{item:01d}_dwi"
     )
     dwi_ogse = create_key(
-        "{bids_subject_session_dir}/dwi/{bids_subject_session_prefix}_run-{item:01d}_ogse"
+        "{bids_subject_session_dir}/dwi/{bids_subject_session_prefix}_acq-ogse_run-{item:01d}_dwi"
     )
 
     # Field Maps:

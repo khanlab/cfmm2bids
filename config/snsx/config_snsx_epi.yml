@@ -12,7 +12,8 @@ credentials_file: ~/.uwo_credentials
 # Final output directory for the BIDS dataset (REQUIRED)
 # Absolute or relative paths can be used, will be relative to working folder
 # Default: "bids"
-final_bids_dir: "/nfs/khan/datasets/SNSX/bids"
+final_bids_dir: "/nfs/snsx/bids/EPI/bids_gradcorr"
+final_bids_uncorr_dir: "/nfs/snsx/bids/EPI/bids_uncorr"
 
 # Force re-query of DICOM server (OPTIONAL, default: false)
 # By default, if the query results (studies.tsv) already exist and the
@@ -71,14 +72,9 @@ search_specs:
           '2023_01_24_108': '2023_01_24_SNSX_P108'
           '2023_01_24_109': '2023_01_24_SNSX_P109'
           '2023_02_16_112': '2023_02_16_SNSX_P112'
-          '2023_03_16_SNSX_C41': '2023_03_16_SNSX_C041'
           '2018_01_23_snSx_p015': '2018_01_23_SNSX_P015'
-          '2024_07_08_SNSX_C50': '2024_07_08_SNSX_C050'
 
-        map:
-          C01: C001
-          C02: C002
-          C03: C003
+        #map:
           
 
         # Regex pattern to extract subject ID (OPTIONAL)
@@ -105,6 +101,121 @@ search_specs:
       session:
         # DICOM field to extract from
         # Common options: StudyDate, PatientID, StudyDescription
+        source: subject
+        
+        # Regex pattern to extract session ID (OPTIONAL)
+        # pattern: ''
+        
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        # Useful if some subjects don't have session info
+        # fillna: '01'
+        
+        # Map extracted values (OPTIONAL)
+        map:
+          P040: '3T'
+          P055: '3T'
+          P089: '3T'
+          P103: '3T'
+          P104: '3T'
+          P108: '3T'
+          P109: '3T'
+          P112: '3T'
+          P138: '3T'
+
+        default: '7T'
+
+  - dicom_query:
+      # Study description pattern (supports wildcards with *)
+      # Example: "MyStudy^*" matches studies starting with "MyStudy^"
+      study_description: Lau^NeuroAnalytics
+      
+      # Study date range (format: YYYYMMDD or YYYYMMDD-YYYYMMDD)
+      # Examples:
+      #   20230101-           (all studies from Jan 1, 2023 onwards)
+      #   20230101-20231231   (studies in 2023)
+      #   20230515            (studies on May 15, 2023 only)
+      study_date: 20170101-
+      
+      # Patient name pattern (OPTIONAL)
+      # Example: "Smith^John" or "AppKI2.hTau.*" (regex supported)
+      # patient_name: ""
+      
+      # Other query parameters (OPTIONAL):
+      # patient_id: ""
+      # study_instance_uid: ""
+      # accession_number: ""
+      
+    # Metadata mappings: Extract subject and session IDs from DICOM fields
+    metadata_mappings:
+      # Subject ID extraction (REQUIRED)
+      subject: 
+        # DICOM field to extract from
+        # Common options: PatientID, PatientName, StudyDescription
+        source: PatientName
+
+        # Pre-map extracted values to new values (OPTIONAL)
+        # Example: map  to session numbers
+#        premap:
+
+
+        # Regex pattern to extract subject ID (OPTIONAL)
+        # Use capture group () to extract the desired part
+        # Examples:
+        #   '_([^_]+)$'                    extracts last part after underscore
+        #   '[sS][fF][cC][-_]?([0-9]+)'   extracts numeric ID from SFC-123 format
+        pattern: '[sS][nN][sS][xX]_([cCpP][0-9]+)$'
+        
+        # Remove non-alphanumeric characters (OPTIONAL, default: false)
+        # Ensures subject IDs are BIDS-compliant (alphanumeric only)
+        sanitize: true
+        
+        # Fill missing values with a default (OPTIONAL)
+        #fillna: '01'
+       
+        # Map extracted values to new values (OPTIONAL)
+        # Example: map visit names to session numbers
+        map:
+          P118: P118
+          P121: P121
+          P141: P141
+          P164: P164
+          P174: P174
+          P180: P180
+          P174: P174
+          P164: P164
+          P118: P118
+          P194: P194
+          P199: P199
+          P200: P200
+          P208: P208
+          P213: P213
+          P219: P219
+          P222: P222
+          P230: P230
+          P232: P232
+          P238: P238
+          P242: P242
+          P245: P245
+          P251: P251
+          P252: P252
+          P255: P255
+          P256: P256
+          P269: P269
+          P274: P274
+          P286: P286
+          P287: P287
+          P290: P290
+          P293: P293
+        default: exclude
+
+      # Session ID extraction (REQUIRED)
+      session:
+        # DICOM field to extract from
+        # Common options: StudyDate, PatientID, StudyDescription
         source: StudyDate
         
         # Regex pattern to extract session ID (OPTIONAL)
@@ -123,7 +234,8 @@ search_specs:
         # map:
         #   01: 'preop'
         #   02: 'postop'
-  
+ 
+
   # Additional search specifications (OPTIONAL)
   # You can define multiple search specs to query from different studies,
   #  or the same study with different specs. Everything will be added to 
@@ -172,6 +284,7 @@ study_filter_specs:
   #   - "subject.str.contains('test')"        # Exclude subjects with 'test' in ID
   exclude:
     - "subject != subject"                  # Exclude if subject is NaN
+    - PatientName.str.contains('_[cC][0-9]')
     - PatientID.str.contains('Hippo')
     - PatientID.str.contains('CAD')
     - PatientID.str.contains('snSx3')
@@ -182,7 +295,43 @@ study_filter_specs:
     - PatientID.str.contains('Hipp7T')
     - PatientID.str.contains('DiffModel')
     - PatientID.str.contains('cadaver')
-  
+    - "subject == 'P233'" #incomplete scan (only localizer)
+    - "subject == 'P016'" # moved to OTH
+    - "subject == 'P019'" # moved to OTH
+    - "subject == 'P023'" # moved to OTH
+    - "subject == 'P024'" # moved to OTH
+    - "subject == 'P025'" # moved to OTH
+    - "subject == 'P027'" # moved to OTH
+    - "subject == 'P030'" # moved to OTH
+    - "subject == 'P033'" # moved to OTH
+    - "subject == 'P034'" # moved to OTH
+    - "subject == 'P035'" # moved to OTH
+    - "subject == 'P036'" # moved to OTH
+    - "subject == 'P038'" # moved to OTH
+    - "subject == 'P039'" # moved to OTH
+    - "subject == 'P040'" # moved to OTH
+    - "subject == 'P041'" # moved to OTH
+    - "subject == 'P042'" # moved to OTH
+    - "subject == 'P043'" # moved to OTH
+    - "subject == 'P062'" # moved to OTH
+    - "subject == 'P063'" # moved to OTH
+    - "subject == 'P064'" # moved to OTH
+    - "subject == 'P065'" # moved to OTH
+    - "subject == 'P066'" # moved to OTH
+    - "subject == 'P068'" # moved to OTH
+    - "subject == 'P069'" # moved to OTH
+    - "subject == 'P073'" # moved to OTH
+    - "subject == 'P075'" # moved to OTH
+    - "subject == 'P082'" # moved to OTH
+    - "subject == 'P083'" # moved to OTH
+    - "subject == 'P086'" # moved to OTH
+    - "subject == 'P088'" # moved to OTH
+    - "subject == 'P091'" # moved to OTH
+    - "subject == 'P093'" # moved to OTH
+    - "subject == 'P096'" # moved to OTH
+    - "subject == 'P101'" # moved to OTH
+    - "subject == 'exclude'"
+
   # Remap sessions based on study date ordering (OPTIONAL)
   # This feature automatically remaps session IDs to time-based labels
   # based on the temporal ordering of study dates for each subject.
@@ -208,16 +357,11 @@ study_filter_specs:
     # units: 'months'
     
     # Rounding step for time intervals (OPTIONAL, default: 6)
-    # Can be a single number (evenly-spaced steps) or a list of specific timepoints.
     # For example, with units='months' and round_step=6:
     #   - 0-3 months → 0m
     #   - 3-9 months → 6m
     #   - 9-15 months → 12m
     # round_step: 6
-    #
-    # Or, to handle unequally-spaced timepoints, provide an explicit list:
-    # round_step: [0, 3, 6, 10]
-    # Each value is snapped to the nearest timepoint in the list.
     
     # Zero-pad session labels (OPTIONAL, default: false)
     # If true, pads session labels with leading zeros to the width of the largest number.
@@ -256,7 +400,7 @@ study_filter_specs:
 # Common options:
 #   --skip-derived      Skip derived/processed images
 #   (empty string for no options)
-cfmm2tar_download_options: '--skip-derived'
+cfmm2tar_download_options: ''
 
 # Merge duplicate studies (OPTIONAL, default: false)
 # If true, multiple studies matching the same subject/session will be merged
@@ -280,7 +424,7 @@ merge_duplicate_studies: true
 # Examples:
 #   heuristics/trident_15T.py
 #   heuristics/Menon_CogMSv2.py
-heuristic: heuristics/cfmm_base.py
+heuristic: heuristics/cfmm_snsx.py
 
 # Path to dcm2niix configuration file (REQUIRED)
 # Contains dcm2niix settings for DICOM to NIfTI conversion
@@ -473,7 +617,32 @@ post_convert_fixes:
   - name: remove_extra_bvec_bval
     pattern: "anat/*MP2RAGE.bv*"
     action: remove
-  
+ 
+  - name: gen_mp2rage_uni_den
+    pattern: "anat/*_UNIT1.nii.gz"
+    action: gen_mp2rage_uni_den
+    multiplying_factor: 6   # optional, default 6 (range 1-10)
+    output_acq: MP2RAGEpostproc  # optional, controls acq- entity in output filename
+
+  - name: import_sp2d_dwi
+    action: copy_from_path
+    src: 
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bvec"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bval"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bmat"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_slspec.txt"
+      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_phase.nii.gz"
+    dst: 
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.nii.gz"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bvec"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bval"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bmat"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.slspec.txt"
+      - "dwi/sub-{subject}_ses-{session}_acq-mde_part-phase_dwi.nii.gz"
+    required: true
+
+
 
   # Additional fixes can be added below as needed.
   # Example 1: Remove unwanted files
@@ -512,6 +681,30 @@ bidsignore:
   - '*_b1DivImg.*'
   - '*_TB1Map.*'
   - '*echo*T1map.*'
+  - '*.bmat'
+  - '*part-phase_dwi.nii.gz'
+  - '*.slspec.txt'
+
+# ============================================================================
+# 6. GRADCORRECT STAGE - Gradient nonlinearity correction (OPTIONAL)
+# ============================================================================
+# Apply gradient nonlinearity correction using the gradcorrect BIDS app.
+# When enabled, this stage runs after the fix stage and the corrected
+# subject/session directories are used for the final BIDS assembly.
+# Requires Singularity/Apptainer to run the container; pass
+# --use-singularity (or --use-apptainer) to Snakemake when running.
+
+gradcorrect:
+  # Enable gradient nonlinearity correction (OPTIONAL, default: false)
+  enable: true
+
+  # Path to gradient coefficient file (REQUIRED when enable is true;
+  # the workflow will raise an error at startup if this is missing)
+  grad_coeff_file: "/nfs/khan/software/gradcorrect/coeff_AC84.grad"
+
+
+  create_bids_uncorr: true
+
 
 # ============================================================================
 # INTERMEDIATE OUTPUT FOLDERS (OPTIONAL)
@@ -522,11 +715,19 @@ bidsignore:
 # Default paths are shown below and are relative to the working directory.
 
 stages:
-  query: "results/0_query"        # Query results (studies.tsv)
-  filter: "results/1_filter"      # Filtered studies (studies_filtered.tsv)
-  download: "/nfs/khan/datasets/SNSX/cfmm2bids/results/2_download" # Downloaded DICOMs
-  convert: "/nfs/khan/datasets/SNSX/cfmm2bids/results/3_convert"    # Initial BIDS conversion + QC reports
-  fix: "/nfs/khan/datasets/SNSX/cfmm2bids/results/4_fix"            # Fixed BIDS dataset
+  query: "/nfs/snsx/sourcedata/cfmm2bids/results/EPI/0_query"        # Query results (studies.tsv)
+  filter: "/nfs/snsx/sourcedata/cfmm2bids/results/EPI/1_filter"      # Filtered studies (studies_filtered.tsv)
+  download: "/nfs/snsx/sourcedata/cfmm2bids/results/EPI/2_download" # Downloaded DICOMs
+  convert: "/nfs/snsx/sourcedata/cfmm2bids/results/EPI/3_convert"    # Initial BIDS conversion + QC reports
+  fix: "/nfs/snsx/sourcedata/cfmm2bids/results/EPI/4_fix"            # Fixed BIDS dataset
+  gradcorr: "/nfs/snsx/sourcedata/cfmm2bids/results/EPI/5_gradcorr"            # corr BIDS dataset
+
+# Centralized download cache (OPTIONAL)
+# Downloads are cached by StudyInstanceUID to avoid re-downloading
+# the same data when subject/session mappings differ
+# Default: "results/download_cache"
+download_cache: "/nfs/snsx/sourcedata/cfmm2bids/results/download_cache"
+
 
 
 # ============================================================================
@@ -574,3 +775,5 @@ stages:
 #    - Validator output can be found in the logs/ folder
 #
 # ============================================================================
+#
+
