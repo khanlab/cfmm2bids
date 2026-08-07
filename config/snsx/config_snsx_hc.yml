@@ -47,6 +47,7 @@ search_specs:
           C03: C003
           C41: C041
           C50: C050
+          C75: C075
           
         pattern: '[sS][nN][sS][xX]_([cCpP][0-9]+)$'
         sanitize: true

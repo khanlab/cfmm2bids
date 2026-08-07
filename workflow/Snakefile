@@ -292,7 +292,7 @@ rule cfmm2tar_by_uid:
     threads: 1
     resources:
         mem_mb=4000,
-        runtime=15,
+        runtime=60,
     shell:
         "cfmm2tar -c {params.creds_file} {params.cfmm2tar_download_options} {params.uid} {output.dicoms_dir} &> {log}"
 
@@ -495,7 +495,6 @@ rule post_convert_fix:
     """
     input:
         bids_subj_dir=stage_convert / "bids-staging/sub-{subject}/ses-{session}",
-        validator_json=stage_convert / "qc/bids_validator.json",
     output:
         bids_subj_dir=directory(stage_fix / "bids-staging/sub-{subject}/ses-{session}"),
         prov_json=stage_fix
