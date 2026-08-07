@@ -143,8 +143,28 @@ def infotodict(seqinfo):
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-FLASH_run-{item:01d}_part-phase_T2starw"
     )
 
+    t2starw = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-FLASH_run-{item:01d}_T2starw"
+    )
+
     tof = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TOF_run-{item:01d}_angio"
+    )
+
+    # pregad flash
+    t2starw_pregad_orig = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PreGadFLASH_rec-orig_run-{item:01d}_T2starw"
+    )
+    t2starw_pregad_den = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PreGadFLASH_rec-denoised_run-{item:01d}_T2starw"
+    )
+
+    # postgad flash
+    t2starw_postgad_orig = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PostGadFLASH_rec-orig_run-{item:01d}_T2starw"
+    )
+    t2starw_postgad_den = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PostGadFLASH_rec-denoised_run-{item:01d}_T2starw"
     )
 
     # resting-state
@@ -169,9 +189,14 @@ def infotodict(seqinfo):
         t2w_rarevfl_den: [],
         t2w_turborare_orig: [],
         t2w_turborare_den: [],
+        t2starw: [],
         t2starw_mag: [],
         t2starw_swi: [],
         t2starw_phase: [],
+        t2starw_pregad_orig: [],
+        t2starw_pregad_den: [],
+        t2starw_postgad_orig: [],
+        t2starw_postgad_den: [],
         tof: [],
         t2w_pregad_orig: [],
         t2w_postgad_orig: [],
@@ -196,6 +221,29 @@ def infotodict(seqinfo):
         info=info,
         handled=handled,
         drop_incomplete_tail=True,  # safer if a triplet is incomplete
+    )
+
+    # ---------------------------------------------------------------------------------------
+    # Pre/Post Gad FLASH T2starw: assign in repeating pairs (orig, denoised)
+    assign_series_by_pattern(
+        seqinfo,
+        match=lambda s: ("flash3d" in s.series_description.lower())
+        and ("pregad" in s.series_description.lower()),
+        exclude=lambda s: any("NON_PARALLEL" in t for t in s.image_type),
+        keys=(t2starw_pregad_orig, t2starw_pregad_den),
+        info=info,
+        handled=handled,
+        drop_incomplete_tail=True,  # safer if a pair is incomplete
+    )
+    assign_series_by_pattern(
+        seqinfo,
+        match=lambda s: ("flash3d" in s.series_description.lower())
+        and ("postgad" in s.series_description.lower()),
+        exclude=lambda s: any("NON_PARALLEL" in t for t in s.image_type),
+        keys=(t2starw_postgad_orig, t2starw_postgad_den),
+        info=info,
+        handled=handled,
+        drop_incomplete_tail=True,  # safer if a pair is incomplete
     )
 
     # T2w RareVFL: assign in repeating pairs (orig, denoised)
@@ -273,6 +321,9 @@ def infotodict(seqinfo):
 
         if "tse2d" in s.series_description:
             info[t2w_tse].append(s.series_id)
+
+        elif "FLASH_3D_SWI_2AVG" in s.series_description:
+            info[t2starw].append(s.series_id)
 
         elif "TOF3D" in s.series_description:
             info[tof].append(s.series_id)
