@@ -151,7 +151,7 @@ def infotodict(seqinfo):
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TOF_run-{item:01d}_angio"
     )
 
-    #pregad flash
+    # pregad flash
     t2starw_pregad_orig = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PreGadFLASH_rec-orig_run-{item:01d}_T2starw"
     )
@@ -159,15 +159,13 @@ def infotodict(seqinfo):
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PreGadFLASH_rec-denoised_run-{item:01d}_T2starw"
     )
 
-    #postgad flash
+    # postgad flash
     t2starw_postgad_orig = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PostGadFLASH_rec-orig_run-{item:01d}_T2starw"
     )
     t2starw_postgad_den = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PostGadFLASH_rec-denoised_run-{item:01d}_T2starw"
     )
-
-
 
     # resting-state
     func_resting_R = create_key(
@@ -229,7 +227,8 @@ def infotodict(seqinfo):
     # Pre/Post Gad FLASH T2starw: assign in repeating pairs (orig, denoised)
     assign_series_by_pattern(
         seqinfo,
-        match=lambda s: ("flash3d" in s.series_description.lower()) and ("pregad" in s.series_description.lower()),
+        match=lambda s: ("flash3d" in s.series_description.lower())
+        and ("pregad" in s.series_description.lower()),
         exclude=lambda s: any("NON_PARALLEL" in t for t in s.image_type),
         keys=(t2starw_pregad_orig, t2starw_pregad_den),
         info=info,
@@ -238,7 +237,8 @@ def infotodict(seqinfo):
     )
     assign_series_by_pattern(
         seqinfo,
-        match=lambda s: ("flash3d" in s.series_description.lower()) and ("postgad" in s.series_description.lower()),
+        match=lambda s: ("flash3d" in s.series_description.lower())
+        and ("postgad" in s.series_description.lower()),
         exclude=lambda s: any("NON_PARALLEL" in t for t in s.image_type),
         keys=(t2starw_postgad_orig, t2starw_postgad_den),
         info=info,
