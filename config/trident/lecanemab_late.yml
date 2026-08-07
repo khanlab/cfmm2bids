@@ -76,6 +76,8 @@ study_filter_specs:
   include:
   exclude:
     - "subject != subject"                  # Exclude if subject is NaN
+    - StudyInstanceUID == '2.16.756.5.5.200.8323328.46598.1721528003.6342' #sub-8103M5 scanned 20240720 (replaced by repeat scan 20240722)
+
   remap_sessions_by_date:
     # Enable/disable session remapping (REQUIRED if section is present)
     enable: true
@@ -154,7 +156,7 @@ download_cache: "/nfs/trident3/mri/cfmm2bids/results/download_cache"
 
 
 # EXTRA: Link to SPIM microscopy datasets
-link_to_spim: True
+link_to_spim: False
 
 #lightsheet bids data to link to
 #  indexed by session number, so different batches can use different sessions

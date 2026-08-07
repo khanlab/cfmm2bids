@@ -495,7 +495,6 @@ rule post_convert_fix:
     """
     input:
         bids_subj_dir=stage_convert / "bids-staging/sub-{subject}/ses-{session}",
-        validator_json=stage_convert / "qc/bids_validator.json",
     output:
         bids_subj_dir=directory(stage_fix / "bids-staging/sub-{subject}/ses-{session}"),
         prov_json=stage_fix
