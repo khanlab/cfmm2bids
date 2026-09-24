@@ -42,11 +42,8 @@ def infotodict(seqinfo):
     megre_qsm_mag_denoised = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-qsm_rec-denoised_part-mag_MEGRE"
     )
-    megre_qsm_imag = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-qsm_part-imag_MEGRE"
-    )
-    megre_qsm_real = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-qsm_part-real_MEGRE"
+    megre_qsm_complex = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-qsm_run-{item:02d}_MEGRE"
     )
 
     # ── MP2RAGE ──────────────────────────────────────────────────────────────
@@ -84,12 +81,11 @@ def infotodict(seqinfo):
     )
 
     info = {
-        dwi_b2kb4kb6k:          [],
-        dwi_multidwienc:                [],
+        dwi_b2kb4kb6k:           [],
+        dwi_multidwienc:         [],
         megre_qsm_mag:           [],
         megre_qsm_mag_denoised:  [],
-        megre_qsm_imag:          [],
-        megre_qsm_real:          [],
+        megre_qsm_complex:       [],
         mp2rage_uni:             [],
         mp2rage_4d:              [],
         mtw:                     [],
@@ -128,15 +124,7 @@ def infotodict(seqinfo):
                     info[megre_qsm_mag_denoised].append(s.series_id)
                     seen.add(("megre_mag_denoised",))
             elif s.dim3 == 2880:
-                if ("megre_complex_raw",) not in seen:
-                    info[megre_qsm_real].append(s.series_id)
-                    info[megre_qsm_imag].append(s.series_id)
-                    seen.add(("megre_complex_raw",))
-                elif ("megre_complex_denoised",) not in seen:
-                    # 80008 — même logique
-                    info[megre_qsm_real].append(s.series_id)
-                    info[megre_qsm_imag].append(s.series_id)
-                    seen.add(("megre_complex_denoised",))
+                info[megre_qsm_complex].append(s.series_id)   # if two complex files are available so it's two reconstruction not a second run 
 
         # ── MP2RAGE ──────────────────────────────────────────────────────────────
         # series_description = "MP2RAGE_2Echo_100iso" (protocol_name = "cfmmMPRAGE").

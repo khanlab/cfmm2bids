@@ -13,15 +13,17 @@ from pathlib import Path
 import numpy as np
 import nibabel as nib
 import pydicom
+import glob
+import os
 from custom.bruker import get_bvec_bval, write_bvec_bval  
 
 logger = logging.getLogger(__name__)
 
 BRUKER_METHOD_TAG = (0x0177, 0x1100)
-GAMMA_H = 42.577478518  # rapport gyromagnétique 1H (MHz/T)
+GAMMA_H = 42.577478518  # (MHz/T)
 
 
-# ── Parser JCAMP-DX (ton parse_method, verbatim) ─────────────────────────────
+# ── Parser JCAMP-DX ─────────────────────────────
 
 def parse_method(lines: list) -> dict:
     """Parses the Bruker PV360 (JCAMP-DX) method file. Keys without ‘$’.
@@ -221,16 +223,68 @@ def write_sidecar(sidecar: dict, nii_path: Path):
     logger.info("Sidecar written : %s", json_path)
 
 
+
+# ── MEGRE complex part correction  ──────────────────────────────────
+
+_MEGRE_NUM_TO_PART = {"1": "imag", "2": "real"}
+
+
+def relabel_complex_megre(prefix):
+    """dcm2niix splitte la série complexe en {prefix}1.nii.gz / {prefix}2.nii.gz.
+    Renommage en part-imag / part-real d'après le NUMÉRO (1=imag, 2=real, vérifié
+    sur données de référence), avec contrôle croisé sur ImageType du sidecar.
+
+    prefix se termine par '_MEGRE' (ex: ..._acq-qsm_run-01_MEGRE).
+    """
+    stem = prefix[: -len("_MEGRE")]  
+
+    for nii in sorted(glob.glob(f"{prefix}[0-9]*.nii.gz")):
+        m = re.search(r"_MEGRE(\d+)\.nii\.gz$", nii)
+        if not m:
+            continue
+        num = m.group(1)
+        part = _MEGRE_NUM_TO_PART.get(num)
+        if part is None:
+            logger.warning("MEGRE complexe: numéro inattendu %s (%s) ; laissé tel quel",
+                           num, nii)
+            continue
+
+        js = nii[: -len(".nii.gz")] + ".json"
+
+        if os.path.exists(js):
+            try:
+                itype = json.load(open(js)).get("ImageType", [])
+                itype_str = " ".join(str(x) for x in itype)
+                expected = {"real": "REAL", "imag": "IMAGINARY"}[part]
+                if expected not in itype_str:
+                    logger.warning(
+                        "MEGRE complexe: %s mappé part-%s (num %s) mais ImageType=%s "
+                        "ne contient pas %s — VÉRIFIER la correspondance.",
+                        os.path.basename(nii), part, num, itype, expected,
+                    )
+            except Exception:
+                logger.exception("MEGRE complexe: lecture ImageType échouée pour %s", js)
+
+        newbase = f"{stem}_part-{part}_MEGRE"
+        os.replace(nii, newbase + ".nii.gz")
+        if os.path.exists(js):
+            os.replace(js, newbase + ".json")
+        logger.info("MEGRE complexe: %s → %s", os.path.basename(nii),
+                    os.path.basename(newbase + ".nii.gz"))
+
 # ── Hook heudiconv ───────────────────────────────────────────────────────────
 
 def custom_callable(prefix, outtypes, item_dicoms):
     logger.debug("custom_callable: prefix=%s", prefix)
-    if not item_dicoms:
-        logger.warning("custom_callable: No DICOM for %s ; skip.", prefix)
-        return
-
-    dcm = item_dicoms[0]
     suffix = prefix.split("_")[-1]
+
+    if suffix == "MEGRE":
+        relabel_complex_megre(prefix)
+        return
+    if not item_dicoms:
+        logger.warning("custom_callable: aucun DICOM pour %s ; skip.", prefix)
+        return
+    dcm = item_dicoms[0]
 
     try:
         if suffix == "dwi":
@@ -264,7 +318,7 @@ def custom_callable(prefix, outtypes, item_dicoms):
             if method:
                 dump_method_json(method, base)
 
-            nii.unlink(missing_ok=True)                  # retirer le 4D d'origine
+            nii.unlink(missing_ok=True)
             dcm2niix_json.unlink(missing_ok=True)
 
     except Exception:
