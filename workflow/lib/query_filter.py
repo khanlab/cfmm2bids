@@ -1,9 +1,15 @@
 import hashlib
 import json
+import time
 
 import numpy as np
 import pandas as pd
-from cfmm2tar import query_metadata
+
+# Import cfmm2tar conditionally - only needed for actual queries
+try:
+    from cfmm2tar import query_metadata
+except ImportError:
+    query_metadata = None
 
 
 def compute_query_hash(search_specs, query_kwargs=None):
@@ -33,6 +39,9 @@ def compute_query_hash(search_specs, query_kwargs=None):
     return hashlib.sha256(params_json.encode()).hexdigest()
 
 
+QUERY_CACHE_MAX_AGE_SECONDS = 86400  # 1 day
+
+
 def should_skip_query(
     query_tsv_path, query_hash_path, current_hash, force_requery=False
 ):
@@ -42,7 +51,8 @@ def should_skip_query(
     The query can be skipped if:
     1. The query TSV file already exists
     2. The hash file exists and matches the current hash
-    3. force_requery is not set
+    3. The query TSV file is not older than one day
+    4. force_requery is not set
 
     Parameters
     ----------
@@ -70,6 +80,13 @@ def should_skip_query(
         return False
 
     try:
+        tsv_age = time.time() - query_tsv_path.stat().st_mtime
+        if tsv_age > QUERY_CACHE_MAX_AGE_SECONDS:
+            return False
+    except OSError:
+        return False
+
+    try:
         stored_hash = query_hash_path.read_text().strip()
         return stored_hash == current_hash
     except OSError:
@@ -92,6 +109,12 @@ def validate_column(df, col):
 
 
 def query_dicoms(search_specs, **query_metadata_kwargs):
+    if query_metadata is None:
+        raise ImportError(
+            "cfmm2tar is required for querying DICOM metadata. "
+            "Install it with: pip install cfmm2tar"
+        )
+
     all_dfs = []
 
     for spec in search_specs:
@@ -107,27 +130,55 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
         # Apply metadata extraction settings
         mappings = spec.get("metadata_mappings", {})
         for target, mapping in mappings.items():
-            source_col = mapping["source"]
-            series = df_[source_col]
+            # Check if a constant value is specified without a map (pure constant behavior).
+            # When 'map' is also present, 'constant' acts as a catch-all default instead
+            # (see below), so we only take the all-rows-constant path when 'map' is absent.
+            if "constant" in mapping and "map" not in mapping:
+                # Use constant value for all rows
+                series = pd.Series(mapping["constant"], index=df_.index, dtype=object)
+            else:
+                # Extract from source column.
+                # 'source' may refer to an original DICOM column OR to a previously-derived
+                # column (e.g. 'subject') created earlier in this same mappings loop.
+                source_col = mapping["source"]
+                series = df_[source_col]
 
-            # Optional remapping of specific values
-            if "premap" in mapping:
-                series = series.replace(mapping["premap"])
+                # Optional remapping of specific values
+                if "premap" in mapping:
+                    series = series.replace(mapping["premap"])
 
-            # Optional regex extraction
-            if "pattern" in mapping:
-                series = series.str.extract(mapping["pattern"], expand=False)
+                # Optional regex extraction
+                if "pattern" in mapping:
+                    series = series.str.extract(mapping["pattern"], expand=False)
 
-            # Optional cleaning / sanitization
-            if mapping.get("sanitize", True):
-                series = series.str.replace(r"[^A-Za-z0-9]", "", regex=True)
+                # Optional cleaning / sanitization
+                if mapping.get("sanitize", True):
+                    series = series.str.replace(r"[^A-Za-z0-9]", "", regex=True)
 
-            # Optional remapping of specific values
-            if "map" in mapping:
-                series = series.replace(mapping["map"])
+                # Optional remapping of specific values
+                if "map" in mapping:
+                    # Track which rows are explicitly covered by the map before replacing.
+                    # series.replace() returns a copy, so no extra .copy() is needed.
+                    mapped_mask = series.isin(mapping["map"].keys())
+                    series = series.replace(mapping["map"])
 
-            if "fillna" in mapping:
-                series = series.fillna(mapping["fillna"])
+                    # Apply a catch-all default to rows not explicitly mapped.
+                    # 'default' takes precedence; when absent, 'constant' is treated as
+                    # an alias for the catch-all default (backwards-compatible).
+                    if "default" in mapping:
+                        series.loc[~mapped_mask] = mapping["default"]
+                    elif "constant" in mapping:
+                        series.loc[~mapped_mask] = mapping["constant"]
+
+                if "fillna" in mapping:
+                    series = series.fillna(mapping["fillna"])
+
+                # Optional format string to reformat value, e.g. "AA{value}"
+                if "format" in mapping:
+                    fmt = mapping["format"]
+                    series = series.apply(
+                        lambda v, f=fmt: f.format(value=v) if pd.notna(v) else v
+                    )
 
             # Assign to target field
             df_[target] = series
@@ -161,125 +212,179 @@ def remap_sessions_by_date(
     """
     Remap session IDs based on study date ordering with time intervals.
 
-    This function takes a dataframe with subject and session columns, computes
-    time differences from a reference date, rounds them to specified intervals,
-    and remaps the session column to meaningful labels.
+    Only rows whose session value parses as a date (and whose reference date is
+    available/parses when reference_col is provided) are remapped.
+    All other rows keep the original session value untouched.
+    """
+    df = df.copy()
 
-    The reference date can be either:
-    - The first session per subject (baseline, when reference_col is None)
-    - A specific date column (e.g., PatientBirthDate for age at scan)
+    # Keep originals so we can "leave untouched" where parsing/deltas fail
+    original_session = df[session_col]
+
+    # --- Parse session dates; non-parsable -> NaT ---
+    if not pd.api.types.is_datetime64_any_dtype(df[session_col]):
+        session_date = pd.to_datetime(
+            df[session_col],
+            format=session_format,
+            errors="coerce",
+        )
+    else:
+        session_date = df[session_col]
+
+    # Only attempt remap for rows with valid session dates
+    valid_session_mask = session_date.notna()
+    if not valid_session_mask.any():
+        return df
+
+    # Work only on valid session rows
+    temp_df = pd.DataFrame(
+        {
+            subject_col: df.loc[valid_session_mask, subject_col],
+            "session_date": session_date.loc[valid_session_mask],
+        },
+        index=df.index[valid_session_mask],
+    ).sort_values([subject_col, "session_date"])
+
+    # --- Determine reference dates aligned to temp_df.index ---
+    if reference_col is None:
+        reference_date = temp_df.groupby(subject_col)["session_date"].transform("first")
+    else:
+        if reference_col not in df.columns:
+            raise ValueError(f"reference_col '{reference_col}' not found in dataframe")
+
+        if not pd.api.types.is_datetime64_any_dtype(df[reference_col]):
+            ref_parsed = pd.to_datetime(
+                df[reference_col],
+                format=reference_format,
+                errors="coerce",
+            )
+        else:
+            ref_parsed = df[reference_col]
+
+        reference_date = ref_parsed.reindex(temp_df.index)
+
+        # If reference_date is missing/unparsable for some rows, those rows should remain untouched
+        valid_ref_mask = reference_date.notna()
+        if not valid_ref_mask.all():
+            temp_df = temp_df.loc[valid_ref_mask]
+            reference_date = reference_date.loc[valid_ref_mask]
+
+        if temp_df.empty:
+            return df
+
+    # --- Compute time deltas ---
+    diff_days = (temp_df["session_date"] - reference_date).dt.days
+
+    if units == "days":
+        time_diff = diff_days.astype(float)
+    elif units == "months":
+        time_diff = diff_days.astype(float) / 30.44
+    elif units == "years":
+        time_diff = diff_days.astype(float) / 365.25
+    else:
+        raise ValueError("units must be one of {'days', 'months', 'years'}")
+
+    if isinstance(round_step, (list, tuple, np.ndarray)):
+        breakpoints = np.asarray(round_step, dtype=float)
+        diffs = np.abs(time_diff.values[:, np.newaxis] - breakpoints[np.newaxis, :])
+        nearest_idx = np.argmin(diffs, axis=1)
+        time_rounded = pd.Series(
+            breakpoints[nearest_idx], index=time_diff.index, dtype=float
+        )
+    else:
+        time_rounded = (np.round(time_diff / round_step) * round_step).astype(float)
+
+    # Label mapping (custom first)
+    if time_to_label is None:
+        time_to_label = {}
+
+    # Use object dtype to allow mixed NaN/string values regardless of pandas version
+    time_label = time_rounded.map(time_to_label).astype(object)
+
+    # Fill unmapped finite values with default labels
+    finite_mask = np.isfinite(time_rounded.to_numpy())
+    if finite_mask.any():
+        finite_idx = time_rounded.index[finite_mask]
+        finite_vals = time_rounded.loc[finite_idx]
+
+        rounded_int = finite_vals.round().astype(int)
+
+        if zero_pad:
+            max_value = int(rounded_int.max())
+            width = len(str(max_value))
+            default_labels = rounded_int.astype(str).str.zfill(width) + units[0]
+        else:
+            default_labels = rounded_int.astype(str) + units[0]
+
+        unmapped = time_label.loc[finite_idx].isna()
+        time_label.loc[finite_idx[unmapped]] = default_labels.loc[finite_idx[unmapped]]
+
+    # --- Write back only for rows we successfully processed; others stay original ---
+    df[session_col] = original_session
+    df.loc[time_label.index, session_col] = time_label
+
+    return df
+
+
+def remap_values(df, remap_specs):
+    """
+    Manually remap values in specific columns for rows matching a query.
+
+    This provides a way to manually correct remapping results (e.g. after
+    ``remap_sessions_by_date``) for individual subjects or rows where
+    automatic remapping produced an incorrect result.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Must include subject_col and session_col columns.
-    subject_col : str, default='subject'
-        Name of subject identifier column.
-    session_col : str, default='session'
-        Name of session/date column (string or datetime).
-    session_format : str, default='%Y%m%d'
-        Format of session column if string (e.g. '%Y%m%d').
-    units : {'days', 'months', 'years'}, default='months'
-        Units for time difference calculation.
-    round_step : float, default=6
-        Step size for rounding (e.g. 6 for 6 months).
-    time_to_label : dict, optional
-        Mapping from numeric rounded time (e.g. 0, 6, 12) to label
-        (e.g. '0m', '6m', '12m'). If None, uses default mapping
-        with numeric labels (e.g., '0m', '6m', '12m').
-    reference_col : str, optional
-        Name of column containing reference date (e.g., 'PatientBirthDate').
-        If None, uses first session per subject as reference (baseline).
-    reference_format : str, default='%Y%m%d'
-        Format of reference_col if string (e.g. '%Y%m%d').
-    zero_pad : bool, default=False
-        If True, zero-pad session labels to the width of the largest number.
-        For example, if the largest value is 100, labels will be '000m', '006m', '012m', etc.
-        If False, labels will be '0m', '6m', '12m', etc.
+        The DataFrame to remap.
+    remap_specs : list of dict
+        Each dict must have the following keys:
+
+        - ``query``: str – a pandas query string that selects the rows to
+          remap (passed to :meth:`pandas.DataFrame.query`).
+        - ``column``: str – the name of the column whose value should be
+          updated for matching rows.
+        - ``value``: scalar – the new value to assign to the column for all
+          matching rows.
 
     Returns
     -------
     pd.DataFrame
-        Original dataframe with session column remapped to time-based labels.
+        A copy of the DataFrame with the specified values remapped.
+
+    Raises
+    ------
+    ValueError
+        If ``column`` is not present in ``df``, or if ``query`` is invalid.
+
+    Examples
+    --------
+    Override the session label for a single subject that was mis-remapped::
+
+        remap_values(
+            df,
+            [{"query": "subject == 'sub01'", "column": "session", "value": "6m"}],
+        )
     """
     df = df.copy()
+    for spec in remap_specs:
+        query = spec["query"]
+        column = spec["column"]
+        value = spec["value"]
 
-    # Convert session col to datetime if needed
-    if not np.issubdtype(df[session_col].dtype, np.datetime64):
-        session_date = pd.to_datetime(df[session_col], format=session_format)
-    else:
-        session_date = df[session_col]
+        if column not in df.columns:
+            raise ValueError(
+                f"remap_values: column '{column}' not found in dataframe. "
+                f"Available columns: {list(df.columns)}"
+            )
 
-    # Create temporary dataframe with original index preserved
-    temp_df = pd.DataFrame(
-        {subject_col: df[subject_col], "session_date": session_date}, index=df.index
-    )
+        try:
+            matching_idx = df.query(query).index
+        except Exception as exc:
+            raise ValueError(f"remap_values: invalid query '{query}': {exc}") from exc
 
-    # Sort by subject and date
-    temp_df = temp_df.sort_values([subject_col, "session_date"])
-
-    # Determine reference date based on reference_col parameter
-    if reference_col is None:
-        # Use first session per subject (baseline behavior)
-        reference_date = temp_df.groupby(subject_col)["session_date"].transform("first")
-    else:
-        # Use specified reference column (e.g., PatientBirthDate)
-        if reference_col not in df.columns:
-            raise ValueError(f"reference_col '{reference_col}' not found in dataframe")
-
-        # Convert reference col to datetime if needed
-        if not np.issubdtype(df[reference_col].dtype, np.datetime64):
-            reference_date = pd.to_datetime(
-                df[reference_col], format=reference_format
-            ).reindex(temp_df.index)
-        else:
-            reference_date = df[reference_col].reindex(temp_df.index)
-
-    # Compute difference in days from reference date
-    diff_days = (temp_df["session_date"] - reference_date).dt.days
-
-    # Convert to desired units
-    if units == "days":
-        time_diff = diff_days
-    elif units == "months":
-        time_diff = diff_days / 30.44
-    elif units == "years":
-        time_diff = diff_days / 365.25
-    else:
-        raise ValueError("units must be one of {'days', 'months', 'years'}")
-
-    # Round to nearest increment
-    time_rounded = (np.round(time_diff / round_step) * round_step).astype(float)
-
-    # Apply label mapping
-    if time_to_label is None:
-        # Use default numeric labels with unit suffix (e.g., '0m', '6m', '12m')
-        # or with zero-padding if requested (e.g., '000m', '006m', '012m')
-        time_to_label = {}
-
-    # Map custom labels first, then fill remaining with default labels
-    time_label = time_rounded.map(time_to_label)
-
-    # For unmapped values, create default labels
-    unmapped_mask = time_label.isna()
-    if unmapped_mask.any():
-        time_rounded_int = time_rounded.astype(int)
-
-        if zero_pad:
-            # Calculate the width needed for zero-padding
-            max_value = time_rounded_int.max()
-            width = len(str(max_value))
-            # Create zero-padded labels
-            default_labels = time_rounded_int.astype(str).str.zfill(width) + units[0]
-        else:
-            # Create regular labels without padding
-            default_labels = time_rounded_int.astype(str) + units[0]
-
-        # Fill in the unmapped values with default labels
-        time_label = time_label.fillna(default_labels)
-
-    # Remap the session column in the original dataframe
-    df[session_col] = time_label
+        df.loc[matching_idx, column] = value
 
     return df
 
@@ -309,6 +414,11 @@ def post_filter(df, post_filter_specs):
             reference_format=remap_config.get("reference_format", "%Y%m%d"),
             zero_pad=remap_config.get("zero_pad", False),
         )
+
+    # Apply manual value remapping if configured (runs after remap_sessions_by_date)
+    remap_values_specs = post_filter_specs.get("remap_values")
+    if remap_values_specs:
+        df = remap_values(df, remap_values_specs)
 
     for q in post_filter_specs.get("exclude_post_remap") or []:
         df = df.query(f"not ({q})")

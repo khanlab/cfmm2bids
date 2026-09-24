@@ -39,7 +39,9 @@ ignore = [
     "SIM115", #Use a context manager for opening files in Logger
     "SIM102", #nested if statements in heuristics
     "N806", #case in variable names in heuristics
-
+    "B005", #Using `.strip()` with multi-character strings is misleading
+    "B025", #try-except block with duplicate exception `OSError`
+    "SIM105", #Use `contextlib.suppress(AttributeError)` instead of `try`-`except`-`pass`
 ]
 
 [tool.ruff.format]

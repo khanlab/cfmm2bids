@@ -1,0 +1,4 @@
+PatientID	PatientName	StudyDate	StudyInstanceUID	StudyDescription	subject	session
+TestPatient001	TestName001	20230101	1.2.3.4.5.6.7.8.9.1	Test^Study^001	001	20230101
+TestPatient002	TestName002	20230105	1.2.3.4.5.6.7.8.9.2	Test^Study^002	002	20230105
+TestPatient001	TestName001	20230201	1.2.3.4.5.6.7.8.9.3	Test^Study^003	001	20230201

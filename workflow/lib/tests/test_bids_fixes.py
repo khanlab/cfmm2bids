@@ -4,16 +4,23 @@ import json
 
 import nibabel as nib
 import numpy as np
+import pytest
 
 from workflow.lib.bids_fixes import (
     FIX_REGISTRY,
     _axcodes2aff,
+    _compute_mp2rage_uni_den,
     _compute_nifti_hash,
+    _find_bids_root,
+    copy_from_path,
     describe_available_fixes,
+    fix_intended_for,
     fix_orientation_quadruped,
+    gen_mp2rage_uni_den,
     register_fix,
     remove_duplicate_niftis,
     remove_file,
+    split_multiecho_nifti,
     update_json,
 )
 
@@ -72,8 +79,222 @@ class TestRegisterFix:
         """Test that built-in fixes are registered correctly."""
         assert "remove" in FIX_REGISTRY
         assert "update_json" in FIX_REGISTRY
+        assert "copy_from_path" in FIX_REGISTRY
+        assert FIX_REGISTRY["copy_from_path"]["scope"] == "session"
+        assert FIX_REGISTRY["remove"]["scope"] == "path"
+        assert "intended_for" in FIX_REGISTRY
         assert "fix_orientation_quadruped" in FIX_REGISTRY
         assert "remove_duplicate_niftis" in FIX_REGISTRY
+        assert "split_multiecho_nifti" in FIX_REGISTRY
+        assert "gen_mp2rage_uni_den" in FIX_REGISTRY
+
+
+class TestCopyFromPath:
+    """Tests for the copy_from_path fix function."""
+
+    def test_copy_from_path_single_match(self, tmp_path):
+        """Test that a single matched file is copied to the destination."""
+        source_root = tmp_path / "offline"
+        source_dir = source_root / "20240501_SNSX_01"
+        source_dir.mkdir(parents=True)
+        source_file = source_dir / "cb_sp2d_diff.nii.gz"
+        source_file.write_text("test")
+
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": str(source_root / "*_SNSX_{subject}" / "cb_sp2d_diff.nii.gz"),
+            "dst": "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        result = copy_from_path(session_dir, spec)
+
+        dst_file = session_dir / "dwi" / "sub-01_ses-pre_acq-sp2d_dwi.nii.gz"
+        assert result == 1
+        assert dst_file.exists()
+        assert dst_file.read_text() == "test"
+
+    def test_copy_from_path_no_match_required(self, tmp_path):
+        """Test that no match raises when required is true."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": str(
+                tmp_path / "missing" / "*_SNSX_{subject}" / "cb_sp2d_diff.nii.gz"
+            ),
+            "dst": "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz",
+            "required": True,
+            "subject": "01",
+            "session": "pre",
+        }
+
+        with pytest.raises(FileNotFoundError):
+            copy_from_path(session_dir, spec)
+
+    def test_copy_from_path_no_match_not_required(self, tmp_path):
+        """Test that no match returns 0 when required is false."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": str(
+                tmp_path / "missing" / "*_SNSX_{subject}" / "cb_sp2d_diff.nii.gz"
+            ),
+            "dst": "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz",
+            "required": False,
+            "subject": "01",
+            "session": "pre",
+        }
+
+        result = copy_from_path(session_dir, spec)
+        assert result == 0
+
+    def test_copy_from_path_multiple_matches_raises(self, tmp_path):
+        """Test that multiple source matches raise an error."""
+        source_root = tmp_path / "offline"
+        source_dir1 = source_root / "20240501_SNSX_01"
+        source_dir2 = source_root / "20240502_SNSX_01"
+        source_dir1.mkdir(parents=True)
+        source_dir2.mkdir(parents=True)
+        (source_dir1 / "cb_sp2d_diff.nii.gz").write_text("one")
+        (source_dir2 / "cb_sp2d_diff.nii.gz").write_text("two")
+
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": str(source_root / "*_SNSX_{subject}" / "cb_sp2d_diff.nii.gz"),
+            "dst": "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+
+        with pytest.raises(ValueError, match="expected 1 match"):
+            copy_from_path(session_dir, spec)
+
+    def test_copy_from_path_creates_destination_subdirs(self, tmp_path):
+        """Test that destination parent directories are created automatically."""
+        source_file = tmp_path / "offline" / "file_01.nii.gz"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text("test")
+
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": str(tmp_path / "offline" / "file_{subject}.nii.gz"),
+            "dst": "custom/nested/sub-{subject}_ses-{session}_dwi.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        result = copy_from_path(session_dir, spec)
+
+        assert result == 1
+        assert (
+            session_dir / "custom" / "nested" / "sub-01_ses-pre_dwi.nii.gz"
+        ).exists()
+
+    def test_copy_from_path_rejects_parent_traversal_in_dst(self, tmp_path):
+        """Test that destination path traversal is rejected."""
+        source_file = tmp_path / "offline" / "file_01.nii.gz"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text("test")
+
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": str(tmp_path / "offline" / "file_{subject}.nii.gz"),
+            "dst": "../outside/sub-{subject}_ses-{session}_dwi.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="cannot include '..'"):
+            copy_from_path(session_dir, spec)
+
+    def test_copy_from_path_rejects_relative_src(self, tmp_path):
+        """Test that source path must be absolute."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": "offline/file_{subject}.nii.gz",
+            "dst": "dwi/sub-{subject}_ses-{session}_dwi.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="must be an absolute path"):
+            copy_from_path(session_dir, spec)
+
+    def test_copy_from_path_list_pairs(self, tmp_path):
+        """Test that src/dst lists are zipped and copied pairwise."""
+        source_root = tmp_path / "offline"
+        source_root.mkdir(parents=True)
+        (source_root / "cb_sp2d_diff.nii.gz").write_text("nii")
+        (source_root / "cb_sp2d_diff.bval").write_text("bval")
+        (source_root / "cb_sp2d_diff.bvec").write_text("bvec")
+
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": [
+                str(source_root / "cb_sp2d_diff.nii.gz"),
+                str(source_root / "cb_sp2d_diff.bval"),
+                str(source_root / "cb_sp2d_diff.bvec"),
+            ],
+            "dst": [
+                "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.nii.gz",
+                "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bval",
+                "dwi/sub-{subject}_ses-{session}_acq-sp2d_dwi.bvec",
+            ],
+            "subject": "01",
+            "session": "pre",
+        }
+
+        result = copy_from_path(session_dir, spec)
+
+        assert result == 3
+        assert (
+            session_dir / "dwi" / "sub-01_ses-pre_acq-sp2d_dwi.nii.gz"
+        ).read_text() == "nii"
+        assert (
+            session_dir / "dwi" / "sub-01_ses-pre_acq-sp2d_dwi.bval"
+        ).read_text() == ("bval")
+        assert (
+            session_dir / "dwi" / "sub-01_ses-pre_acq-sp2d_dwi.bvec"
+        ).read_text() == ("bvec")
+
+    def test_copy_from_path_rejects_mismatched_src_dst_list_lengths(self, tmp_path):
+        """Test that src/dst lists must have matching lengths."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": [str(tmp_path / "one.nii.gz"), str(tmp_path / "two.nii.gz")],
+            "dst": ["dwi/sub-{subject}_ses-{session}_one.nii.gz"],
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="same length"):
+            copy_from_path(session_dir, spec)
+
+    def test_copy_from_path_rejects_mixed_src_dst_container_types(self, tmp_path):
+        """Test that src and dst must both be strings or both be lists."""
+        session_dir = tmp_path / "sub-01" / "ses-pre"
+        session_dir.mkdir(parents=True)
+
+        spec = {
+            "src": [str(tmp_path / "one.nii.gz")],
+            "dst": "dwi/sub-{subject}_ses-{session}_one.nii.gz",
+            "subject": "01",
+            "session": "pre",
+        }
+        with pytest.raises(ValueError, match="both be strings or both be lists"):
+            copy_from_path(session_dir, spec)
 
 
 class TestRemoveFile:
@@ -446,3 +667,519 @@ class TestDescribeAvailableFixes:
         # Check for parts of the docstrings
         assert "Remove the file entirely" in result
         assert "Update JSON file fields" in result
+
+
+class TestSplitMultiechoNifti:
+    """Tests for the split_multiecho_nifti fix function."""
+
+    def _make_4d_nifti(self, tmp_path, name, shape=(10, 10, 10, 3), dtype=np.float32):
+        """Create a synthetic 4D NIfTI file and return its Path."""
+        data = np.random.rand(*shape).astype(dtype)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / name
+        nib.save(img, nii_path)
+        return nii_path
+
+    def test_split_multiecho_creates_echo_files(self, tmp_path):
+        """Test that echo volumes are created with correct echo- entity."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+
+        result = split_multiecho_nifti(nii_path, {})
+
+        assert result is True
+        for echo_num in range(1, 4):
+            echo_file = (
+                tmp_path / f"sub-XX_ses-YY_run-01_echo-{echo_num}_T2starw.nii.gz"
+            )
+            assert echo_file.exists(), f"Missing {echo_file.name}"
+
+    def test_split_multiecho_creates_avgecho_file(self, tmp_path):
+        """Test that the average echo image is created with rec-avgecho entity."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+
+        split_multiecho_nifti(nii_path, {})
+
+        avg_file = tmp_path / "sub-XX_ses-YY_rec-avgecho_run-01_T2starw.nii.gz"
+        assert avg_file.exists()
+
+    def test_split_multiecho_removes_original(self, tmp_path):
+        """Test that the original multi-echo file is removed."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+
+        split_multiecho_nifti(nii_path, {})
+
+        assert not nii_path.exists()
+
+    def test_split_multiecho_copies_json_sidecar(self, tmp_path):
+        """Test that JSON sidecars are copied for each output file."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_run-01_T2starw.nii.gz")
+        json_path = tmp_path / "sub-XX_ses-YY_run-01_T2starw.json"
+        json_path.write_text('{"EchoTime": 0.02}')
+
+        split_multiecho_nifti(nii_path, {})
+
+        # JSON removed for original
+        assert not json_path.exists()
+        # JSON present for each echo and for avgecho
+        for echo_num in range(1, 4):
+            assert (
+                tmp_path / f"sub-XX_ses-YY_run-01_echo-{echo_num}_T2starw.json"
+            ).exists()
+        assert (tmp_path / "sub-XX_ses-YY_rec-avgecho_run-01_T2starw.json").exists()
+
+    def test_split_multiecho_echo_data_correct(self, tmp_path):
+        """Test that each echo volume contains the correct data slice."""
+        data = np.random.rand(10, 10, 10, 3).astype(np.float32)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / "sub-XX_run-01_T2starw.nii.gz"
+        nib.save(img, nii_path)
+
+        split_multiecho_nifti(nii_path, {})
+
+        for echo_idx in range(3):
+            echo_num = echo_idx + 1
+            echo_file = tmp_path / f"sub-XX_run-01_echo-{echo_num}_T2starw.nii.gz"
+            loaded = np.asanyarray(nib.load(echo_file).dataobj)
+            np.testing.assert_array_equal(loaded, data[..., echo_idx])
+
+    def test_split_multiecho_avgecho_data_correct(self, tmp_path):
+        """Test that the average echo image contains the mean of all echoes."""
+        data = np.random.rand(10, 10, 10, 3).astype(np.float32)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / "sub-XX_run-01_T2starw.nii.gz"
+        nib.save(img, nii_path)
+
+        split_multiecho_nifti(nii_path, {})
+
+        avg_file = tmp_path / "sub-XX_rec-avgecho_run-01_T2starw.nii.gz"
+        loaded_avg = np.asanyarray(nib.load(avg_file).dataobj)
+        expected_avg = np.mean(data, axis=3)
+        np.testing.assert_array_almost_equal(loaded_avg, expected_avg)
+
+    def test_split_multiecho_no_run_entity(self, tmp_path):
+        """Test correct entity placement when there is no run entity in the filename."""
+        nii_path = self._make_4d_nifti(tmp_path, "sub-XX_ses-YY_T2starw.nii.gz")
+
+        split_multiecho_nifti(nii_path, {})
+
+        # echo- placed before suffix
+        assert (tmp_path / "sub-XX_ses-YY_echo-1_T2starw.nii.gz").exists()
+        # rec- placed before suffix
+        assert (tmp_path / "sub-XX_ses-YY_rec-avgecho_T2starw.nii.gz").exists()
+
+    def test_split_multiecho_returns_false_for_non_nifti(self, tmp_path):
+        """Test that split_multiecho_nifti returns False for non-NIfTI files."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("not a nifti")
+
+        result = split_multiecho_nifti(txt_file, {})
+
+        assert result is False
+
+    def test_split_multiecho_returns_false_for_3d_nifti(self, tmp_path):
+        """Test that split_multiecho_nifti returns False for 3D NIfTI files."""
+        data = np.random.rand(10, 10, 10).astype(np.float32)
+        img = nib.Nifti1Image(data, np.eye(4))
+        nii_path = tmp_path / "sub-XX_T2starw.nii.gz"
+        nib.save(img, nii_path)
+
+        result = split_multiecho_nifti(nii_path, {})
+
+        assert result is False
+        assert nii_path.exists()  # original should be unchanged
+
+
+class TestFindBidsRoot:
+    """Tests for the _find_bids_root helper function."""
+
+    def test_find_bids_root_returns_parent_of_sub_dir(self, tmp_path):
+        """Test that _find_bids_root finds the BIDS root correctly."""
+        fmap_json = (
+            tmp_path / "sub-01" / "ses-pre" / "fmap" / "sub-01_ses-pre_fmap.json"
+        )
+        fmap_json.parent.mkdir(parents=True)
+        fmap_json.write_text("{}")
+
+        result = _find_bids_root(fmap_json)
+
+        assert result == tmp_path
+
+    def test_find_bids_root_returns_none_when_no_sub_dir(self, tmp_path):
+        """Test that _find_bids_root returns None when no sub-* parent exists."""
+        orphan = tmp_path / "fmap" / "test.json"
+        orphan.parent.mkdir(parents=True)
+        orphan.write_text("{}")
+
+        result = _find_bids_root(orphan)
+
+        assert result is None
+
+
+class TestFixIntendedFor:
+    """Tests for the fix_intended_for fix function."""
+
+    def _make_bids_tree(self, tmp_path):
+        """Create a minimal BIDS session directory tree."""
+        bids_root = tmp_path
+        fmap_dir = bids_root / "sub-01" / "ses-pre" / "fmap"
+        func_dir = bids_root / "sub-01" / "ses-pre" / "func"
+        fmap_dir.mkdir(parents=True)
+        func_dir.mkdir(parents=True)
+        return bids_root, fmap_dir, func_dir
+
+    def test_fix_intended_for_sets_intended_for(self, tmp_path):
+        """Test that fix_intended_for sets IntendedFor with subject-relative paths by default."""
+        bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_acq-pe_epi.json"
+        fmap_json.write_text(json.dumps({"EchoTime": 0.02}))
+
+        bold1 = func_dir / "sub-01_ses-pre_task-motor_run-1_bold.nii.gz"
+        bold2 = func_dir / "sub-01_ses-pre_task-motor_run-2_bold.nii.gz"
+        bold1.write_text("")
+        bold2.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert "IntendedFor" in data
+        assert sorted(data["IntendedFor"]) == [
+            "ses-pre/func/sub-01_ses-pre_task-motor_run-1_bold.nii.gz",
+            "ses-pre/func/sub-01_ses-pre_task-motor_run-2_bold.nii.gz",
+        ]
+
+    def test_fix_intended_for_sets_intended_for_bids_uri(self, tmp_path):
+        """Test that fix_intended_for sets IntendedFor with bids:: paths when use_bids_uri is True."""
+        bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_acq-pe_epi.json"
+        fmap_json.write_text(json.dumps({"EchoTime": 0.02}))
+
+        bold1 = func_dir / "sub-01_ses-pre_task-motor_run-1_bold.nii.gz"
+        bold2 = func_dir / "sub-01_ses-pre_task-motor_run-2_bold.nii.gz"
+        bold1.write_text("")
+        bold2.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz", "use_bids_uri": True}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert "IntendedFor" in data
+        assert sorted(data["IntendedFor"]) == [
+            "bids::sub-01/ses-pre/func/sub-01_ses-pre_task-motor_run-1_bold.nii.gz",
+            "bids::sub-01/ses-pre/func/sub-01_ses-pre_task-motor_run-2_bold.nii.gz",
+        ]
+
+    def test_fix_intended_for_overwrites_existing_intended_for(self, tmp_path):
+        """Test that fix_intended_for replaces any existing IntendedFor value."""
+        bids_root, fmap_dir, func_dir = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_fmap.json"
+        fmap_json.write_text(json.dumps({"IntendedFor": ["bids::old/path.nii.gz"]}))
+
+        bold = func_dir / "sub-01_ses-pre_task-rest_bold.nii.gz"
+        bold.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        fix_intended_for(fmap_json, spec)
+
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert data["IntendedFor"] == [
+            "ses-pre/func/sub-01_ses-pre_task-rest_bold.nii.gz"
+        ]
+
+    def test_fix_intended_for_returns_false_for_non_json(self, tmp_path):
+        """Test that fix_intended_for returns False for non-JSON files."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("not json")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(txt_file, spec)
+
+        assert result is False
+
+    def test_fix_intended_for_returns_false_when_no_target_pattern(self, tmp_path):
+        """Test that fix_intended_for returns False when target_pattern is absent."""
+        bids_root, fmap_dir, _ = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+
+        result = fix_intended_for(fmap_json, {})
+
+        assert result is False
+
+    def test_fix_intended_for_returns_false_when_no_targets_found(self, tmp_path):
+        """Test that fix_intended_for returns False when no NIfTI files are matched."""
+        bids_root, fmap_dir, _ = self._make_bids_tree(tmp_path)
+
+        fmap_json = fmap_dir / "sub-01_ses-pre_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is False
+
+    def test_fix_intended_for_returns_false_when_no_bids_root_and_bids_uri(
+        self, tmp_path
+    ):
+        """Test that fix_intended_for returns False when use_bids_uri=True and BIDS root cannot be found."""
+        fmap_dir = tmp_path / "fmap"
+        func_dir = tmp_path / "func"
+        fmap_dir.mkdir()
+        func_dir.mkdir()
+        fmap_json = fmap_dir / "test_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+        bold = func_dir / "test_bold.nii.gz"
+        bold.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz", "use_bids_uri": True}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is False
+
+    def test_fix_intended_for_works_without_bids_root_when_not_using_uri(
+        self, tmp_path
+    ):
+        """Test that fix_intended_for works without a BIDS root when use_bids_uri is False."""
+        # Use a two-level structure (subject/session/modality) without sub-/ses- prefixes
+        # so there is no BIDS root detectable, but the depth matches BIDS convention.
+        subject_dir = tmp_path / "subject"
+        session_dir = subject_dir / "session"
+        fmap_dir = session_dir / "fmap"
+        func_dir = session_dir / "func"
+        fmap_dir.mkdir(parents=True)
+        func_dir.mkdir(parents=True)
+        fmap_json = fmap_dir / "test_fmap.json"
+        fmap_json.write_text(json.dumps({}))
+        bold = func_dir / "test_bold.nii.gz"
+        bold.write_text("")
+
+        spec = {"target_pattern": "func/*bold.nii.gz"}
+        result = fix_intended_for(fmap_json, spec)
+
+        assert result is True
+        with open(fmap_json) as f:
+            data = json.load(f)
+        assert data["IntendedFor"] == ["session/func/test_bold.nii.gz"]
+
+
+class TestGenMp2rageUniDen:
+    """Tests for the gen_mp2rage_uni_den fix function."""
+
+    def _make_mp2rage_set(self, tmp_path, base="sub-01_ses-01", run="run-01"):
+        """Create a minimal set of synthetic MP2RAGE NIfTI files (UNI, INV1, INV2).
+
+        Returns a dict with keys 'uni', 'inv1', 'inv2', and the expected output
+        paths 'new_t1w' and 'existing_t1w'.
+
+        Naming follows cfmm_base heuristic convention:
+          UNI:  {base}_acq-MP2RAGE_{run}_UNIT1.nii.gz
+          INV1: {base}_{run}_inv-1_MP2RAGE.nii.gz
+          INV2: {base}_{run}_inv-2_MP2RAGE.nii.gz
+        """
+        anat_dir = tmp_path / "anat"
+        anat_dir.mkdir(parents=True, exist_ok=True)
+
+        shape = (10, 10, 10)
+        affine = np.eye(4)
+
+        # UNI: integer-format values in [0, 4095]
+        uni_data = np.random.randint(0, 4096, shape).astype(np.float32)
+        uni_img = nib.Nifti1Image(uni_data, affine)
+
+        # INV1 / INV2: arbitrary positive values
+        inv1_data = np.abs(np.random.randn(*shape)).astype(np.float32) + 1.0
+        inv2_data = np.abs(np.random.randn(*shape)).astype(np.float32) + 2.0
+        inv1_img = nib.Nifti1Image(inv1_data, affine)
+        inv2_img = nib.Nifti1Image(inv2_data, affine)
+
+        run_part = f"_{run}" if run else ""
+
+        uni_path = anat_dir / f"{base}_acq-MP2RAGE{run_part}_UNIT1.nii.gz"
+        inv1_path = anat_dir / f"{base}{run_part}_inv-1_MP2RAGE.nii.gz"
+        inv2_path = anat_dir / f"{base}{run_part}_inv-2_MP2RAGE.nii.gz"
+        existing_t1w = anat_dir / f"{base}_acq-MP2RAGE{run_part}_T1w.nii.gz"
+        new_t1w = anat_dir / f"{base}_acq-MP2RAGEpostproc{run_part}_T1w.nii.gz"
+
+        nib.save(uni_img, uni_path)
+        nib.save(inv1_img, inv1_path)
+        nib.save(inv2_img, inv2_path)
+
+        return {
+            "uni": uni_path,
+            "inv1": inv1_path,
+            "inv2": inv2_path,
+            "new_t1w": new_t1w,
+            "existing_t1w": existing_t1w,
+            "anat_dir": anat_dir,
+        }
+
+    # ------------------------------------------------------------------
+    # Basic success path
+    # ------------------------------------------------------------------
+
+    def test_gen_mp2rage_uni_den_creates_t1w(self, tmp_path):
+        """Test that gen_mp2rage_uni_den creates the T1w output file."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is True
+        assert paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_output_is_nifti(self, tmp_path):
+        """Test that the generated T1w output is a valid NIfTI file."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        gen_mp2rage_uni_den(paths["uni"], {})
+
+        img = nib.load(paths["new_t1w"])
+        assert img.shape == (10, 10, 10)
+
+    def test_gen_mp2rage_uni_den_output_dtype_int16(self, tmp_path):
+        """Test that the generated image uses int16 data type."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        gen_mp2rage_uni_den(paths["uni"], {})
+
+        img = nib.load(paths["new_t1w"])
+        assert np.issubdtype(img.get_data_dtype(), np.integer)
+
+    def test_gen_mp2rage_uni_den_copies_json_sidecar(self, tmp_path):
+        """Test that the UNI JSON sidecar is copied alongside the T1w output."""
+        paths = self._make_mp2rage_set(tmp_path)
+        uni_json = paths["uni"].with_suffix("").with_suffix(".json")
+        uni_json.write_text('{"ScanningSequence": "MP2RAGE"}')
+
+        gen_mp2rage_uni_den(paths["uni"], {})
+
+        expected_json = paths["new_t1w"].with_suffix("").with_suffix(".json")
+        assert expected_json.exists()
+        with open(expected_json) as f:
+            data = json.load(f)
+        assert data["ScanningSequence"] == "MP2RAGE"
+
+    # ------------------------------------------------------------------
+    # Custom spec options
+    # ------------------------------------------------------------------
+
+    def test_gen_mp2rage_uni_den_custom_output_acq(self, tmp_path):
+        """Test that output_acq spec field controls the acq- entity."""
+        paths = self._make_mp2rage_set(tmp_path)
+        custom_t1w = (
+            paths["anat_dir"] / "sub-01_ses-01_acq-MyCustomAcq_run-01_T1w.nii.gz"
+        )
+
+        result = gen_mp2rage_uni_den(paths["uni"], {"output_acq": "MyCustomAcq"})
+
+        assert result is True
+        assert custom_t1w.exists()
+
+    def test_gen_mp2rage_uni_den_custom_multiplying_factor(self, tmp_path):
+        """Test that multiplying_factor spec field is accepted without error."""
+        paths = self._make_mp2rage_set(tmp_path)
+
+        result = gen_mp2rage_uni_den(paths["uni"], {"multiplying_factor": 10})
+
+        assert result is True
+        assert paths["new_t1w"].exists()
+
+    # ------------------------------------------------------------------
+    # Skip / guard conditions
+    # ------------------------------------------------------------------
+
+    def test_gen_mp2rage_uni_den_skips_when_existing_t1w_present(self, tmp_path):
+        """Test that the fix is skipped when a scanner T1w (acq-MP2RAGE) already exists."""
+        paths = self._make_mp2rage_set(tmp_path)
+        # Create the scanner-produced T1w
+        paths["existing_t1w"].write_bytes(b"")
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+        assert not paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_skips_when_output_already_exists(self, tmp_path):
+        """Test that the fix is skipped when the output T1w already exists."""
+        paths = self._make_mp2rage_set(tmp_path)
+        paths["new_t1w"].write_bytes(b"")
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+
+    def test_gen_mp2rage_uni_den_skips_when_inv1_missing(self, tmp_path):
+        """Test that the fix returns False when INV1 is not present."""
+        paths = self._make_mp2rage_set(tmp_path)
+        paths["inv1"].unlink()
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+        assert not paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_skips_when_inv2_missing(self, tmp_path):
+        """Test that the fix returns False when INV2 is not present."""
+        paths = self._make_mp2rage_set(tmp_path)
+        paths["inv2"].unlink()
+
+        result = gen_mp2rage_uni_den(paths["uni"], {})
+
+        assert result is False
+        assert not paths["new_t1w"].exists()
+
+    def test_gen_mp2rage_uni_den_returns_false_for_non_nifti(self, tmp_path):
+        """Test that the fix returns False for non-NIfTI files."""
+        txt_file = tmp_path / "test.txt"
+        txt_file.write_text("not a nifti")
+
+        result = gen_mp2rage_uni_den(txt_file, {})
+
+        assert result is False
+
+    def test_gen_mp2rage_uni_den_returns_false_when_acq_marker_missing(self, tmp_path):
+        """Test that the fix returns False when _acq-MP2RAGE_ is not in the filename."""
+        anat_dir = tmp_path / "anat"
+        anat_dir.mkdir()
+        nii = anat_dir / "sub-01_ses-01_run-01_UNIT1.nii.gz"
+        nib.save(nib.Nifti1Image(np.zeros((5, 5, 5)), np.eye(4)), nii)
+
+        result = gen_mp2rage_uni_den(nii, {})
+
+        assert result is False
+
+    def test_gen_mp2rage_uni_den_returns_false_when_unit1_suffix_missing(
+        self, tmp_path
+    ):
+        """Test that the fix returns False when _UNIT1 is missing from the filename."""
+        anat_dir = tmp_path / "anat"
+        anat_dir.mkdir()
+        nii = anat_dir / "sub-01_ses-01_acq-MP2RAGE_run-01_MP2RAGE.nii.gz"
+        nib.save(nib.Nifti1Image(np.zeros((5, 5, 5)), np.eye(4)), nii)
+
+        result = gen_mp2rage_uni_den(nii, {})
+
+        assert result is False
+
+    # ------------------------------------------------------------------
+    # _compute_mp2rage_uni_den helper
+    # ------------------------------------------------------------------
+
+    def test_compute_mp2rage_uni_den_produces_output_file(self, tmp_path):
+        """Test that _compute_mp2rage_uni_den writes a NIfTI to output_path."""
+        paths = self._make_mp2rage_set(tmp_path)
+        out = tmp_path / "output.nii.gz"
+
+        _compute_mp2rage_uni_den(paths["uni"], paths["inv1"], paths["inv2"], out)
+
+        assert out.exists()
+        img = nib.load(out)
+        assert img.shape == (10, 10, 10)

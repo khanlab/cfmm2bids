@@ -22,8 +22,31 @@ stage_filter = Path(stages.get("filter", "results/1_filter"))
 stage_download = Path(stages.get("download", "results/2_download"))
 stage_convert = Path(stages.get("convert", "results/3_convert"))
 stage_fix = Path(stages.get("fix", "results/4_fix"))
+stage_gradcorr = Path(stages.get("gradcorr", "results/5_gradcorr"))
+
+# Centralized download cache
+download_cache = Path(config.get("download_cache", "results/download_cache"))
 
 final_bids_dir = Path(config.get("final_bids_dir", "bids"))
+
+# Gradient nonlinearity correction settings
+gradcorrect_config = config.get("gradcorrect", {})
+use_gradcorrect = gradcorrect_config.get("enable", False)
+
+if use_gradcorrect and not gradcorrect_config.get("grad_coeff_file"):
+    raise ValueError(
+        "gradcorrect is enabled but 'gradcorrect.grad_coeff_file' is not set in config. "
+        "Please provide the path to the gradient coefficient file."
+    )
+
+# Stage used for final assembly - gradcorr if enabled, otherwise fix
+stage_for_assembly = stage_gradcorr if use_gradcorrect else stage_fix
+
+# Uncorrected BIDS settings (only relevant when gradcorrect is enabled)
+create_bids_uncorr = use_gradcorrect and gradcorrect_config.get(
+    "create_bids_uncorr", False
+)
+final_bids_uncorr_dir = Path(config.get("final_bids_uncorr_dir", "bids_uncorr"))
 
 # ----------
 # 0 - query
@@ -100,12 +123,94 @@ df.to_csv(stage_filter / "studies_filtered.tsv", sep="\t", index=False)
 subjects = df[["subject", "session"]].drop_duplicates().subject
 sessions = df[["subject", "session"]].drop_duplicates().session
 
+# Get unique UIDs for download cache
+unique_uids = df["StudyInstanceUID"].unique().tolist()
+
+# Collect uncorrected BIDS targets when gradcorrect + create_bids_uncorr are both enabled
+_bids_uncorr_targets = (
+    [
+        *expand(
+            final_bids_uncorr_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        final_bids_uncorr_dir / "dataset_description.json",
+        final_bids_uncorr_dir / ".bidsignore",
+    ]
+    if create_bids_uncorr
+    else []
+)
+
+
+# SPIM linkages
+
+spim_targets = []
+if "spim" in config and config.get("link_to_spim", False):
+
+    import string as _string
+
+    from snakebids import generate_inputs
+
+    spim_targets = []
+
+    for ses, cfg in config["spim"].items():
+        # Validate out_path only uses {subject} and {session} wildcards,
+        # since those are the only wildcards available in the link_spim rule.
+        _allowed_wildcards = {"subject", "session"}
+        _used_wildcards = {
+            field_name
+            for _, field_name, _, _ in _string.Formatter().parse(cfg["out_path"])
+            if field_name is not None
+        }
+        _unknown = _used_wildcards - _allowed_wildcards
+        if _unknown:
+            raise ValueError(
+                f"SPIM config for session '{ses}': out_path '{cfg['out_path']}' "
+                f"contains unsupported wildcards: {_unknown}. "
+                f"Only 'subject' and 'session' are available."
+            )
+
+        config["spim"][ses]["inputs"] = generate_inputs(
+            bids_dir=cfg["bids_dir"], pybids_inputs=cfg["pybids_inputs"]
+        )
+
+        # get intersection of MRI subjects and SPIM subjects
+        subjects_spim = config["spim"][ses]["inputs"].subjects
+        subjects_spim_mri = set(subjects_spim) & set(subjects)
+        subjects_spim_no_mri = set(subjects_spim) - subjects_spim_mri
+
+        if len(subjects_spim_no_mri) > 0:
+            print(
+                f"WARNING: there are SPIM subjects that do not correspond to an MRI subject: {subjects_spim_no_mri}."
+            )
+            print(
+                "  This could be expected of batch controls, but if not may indicate incorrect subject labels"
+            )
+
+        spim_targets.extend(
+            expand(
+                final_bids_dir / "sub-{subject}" / "ses-{session}",
+                subject=list(subjects_spim_mri),
+                session=ses,
+            )
+        )
+
 
 rule all:
     input:
-        final_bids_dir,
+        expand(
+            final_bids_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        final_bids_dir / "dataset_description.json",
+        final_bids_dir / ".bidsignore",
         stage_convert / "qc/aggregate_report.html",
         stage_fix / "qc/aggregate_report.html",
+        _bids_uncorr_targets,
+        spim_targets,
 
 
 rule download:
@@ -159,11 +264,48 @@ def get_uid_from_wildcards(wildcards):
             )
 
 
-rule cfmm2tar:
+def get_uids_from_wildcards(wildcards):
+    """Get list of UIDs for a subject/session pair (handles merge_duplicate_studies)."""
+    matches = lookup(
+        query=f"subject == '{wildcards.subject}' and session == '{wildcards.session}'",
+        within=df,
+    )
+    if isinstance(matches, tuple):
+        return [matches.StudyInstanceUID]
+    else:
+        return [m.StudyInstanceUID for m in matches]
+
+
+rule cfmm2tar_by_uid:
+    """
+    Download DICOM study to centralized cache indexed by UID.
+    This allows re-use of downloads when the same UID has different subject/session mappings.
+    """
     params:
-        uid=get_uid_from_wildcards,
+        uid=lambda wildcards: f"-u {wildcards.uid}",
         cfmm2tar_download_options=config["cfmm2tar_download_options"],
         creds_file=config["credentials_file"],
+    output:
+        dicoms_dir=directory(download_cache / "{uid}"),
+    log:
+        "logs/download_by_uid/{uid}.log",
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=60,
+    shell:
+        "cfmm2tar -c {params.creds_file} {params.cfmm2tar_download_options} {params.uid} {output.dicoms_dir} &> {log}"
+
+
+rule link_to_tar:
+    """
+    Create subject/session directory with symlinks to cached UID downloads.
+    This avoids re-downloading the same data when subject/session mappings differ.
+    """
+    input:
+        cached_dirs=lambda wildcards: expand(
+            download_cache / "{uid}", uid=get_uids_from_wildcards(wildcards)
+        ),
     output:
         dicoms_dir=directory(stage_download / "dicoms/sub-{subject}/ses-{session}"),
     log:
@@ -171,9 +313,10 @@ rule cfmm2tar:
     threads: 1
     resources:
         mem_mb=4000,
-        runtime=15,
-    shell:
-        "cfmm2tar -c {params.creds_file} {params.cfmm2tar_download_options} {params.uid} {output.dicoms_dir} &> {log}"
+        runtime=5,
+    localrule: True
+    script:
+        "scripts/link_to_tar.py"
 
 
 rule heudiconv:
@@ -186,7 +329,7 @@ rule heudiconv:
       separately with heudiconv, then merges outputs with series ID offsetting
     """
     input:
-        dicoms_dir=rules.cfmm2tar.output.dicoms_dir,
+        dicoms_dir=rules.link_to_tar.output.dicoms_dir,
         heuristic=config["heuristic"],
         base_heuristics=config.get("base_heuristics", []),
         dcmconfig_json=config["dcmconfig_json"],
@@ -206,7 +349,7 @@ rule heudiconv:
         "logs/heudiconv/sub-{subject}_ses-{session}.log",
     shadow:
         "minimal"
-    threads: 16
+    threads: 4
     resources:
         mem_mb=16000,
         runtime=60,
@@ -214,32 +357,32 @@ rule heudiconv:
         "scripts/run_heudiconv.py"
 
 
-rule bidsignore_convert_staging:
+rule bidsignore:
     params:
         lines=config.get("bidsignore", []),
     output:
-        ignore=stage_convert / "bids-staging/.bidsignore",
+        ignore="{prefix}/bids-staging/.bidsignore",
     resources:
         mem_mb=4000,
         runtime=10,
+    localrule: True
     run:
         with open(output.ignore, "w") as file:
             for item in params.lines:
                 file.write(item + "\n")
 
 
-rule dataset_description_for_convert_staging:
+rule dataset_description:
     input:
         "resources/dataset_description.json",
     output:
-        stage_convert / "bids-staging/dataset_description.json",
-    log:
-        "logs/dataset_description/init_dataset_description_staging.log",
+        "{prefix}/bids-staging/dataset_description.json",
     resources:
         mem_mb=4000,
         runtime=1,
+    localrule: True
     shell:
-        "cp {input} {output} &> {log}"
+        "cp {input} {output}"
 
 
 rule generate_convert_qc_figs:
@@ -352,7 +495,6 @@ rule post_convert_fix:
     """
     input:
         bids_subj_dir=stage_convert / "bids-staging/sub-{subject}/ses-{session}",
-        validator_json=stage_convert / "qc/bids_validator.json",
     output:
         bids_subj_dir=directory(stage_fix / "bids-staging/sub-{subject}/ses-{session}"),
         prov_json=stage_fix
@@ -367,35 +509,6 @@ rule post_convert_fix:
         runtime=60,
     script:
         "scripts/post_convert_fix.py"
-
-
-rule bidsignore_post_convert_fix_staging:
-    params:
-        lines=config.get("bidsignore", []),
-    output:
-        ignore=stage_fix / "bids-staging/.bidsignore",
-    resources:
-        mem_mb=4000,
-        runtime=10,
-    run:
-        with open(output.ignore, "w") as file:
-            for item in params.lines:
-                file.write(item + "\n")
-
-
-rule dataset_description_fixed_staging:
-    input:
-        dd_json=stage_convert / "bids-staging/dataset_description.json",
-    output:
-        dd_json=stage_fix / "bids-staging/dataset_description.json",
-    log:
-        "logs/fix/dataset_description_staging.log",
-    threads: 1
-    resources:
-        mem_mb=4000,
-        runtime=10,
-    shell:
-        "cp {input.dd_json} {output.dd_json} &> {log}"
 
 
 rule assemble_fix_bids:
@@ -436,6 +549,50 @@ rule assemble_fix_bids:
         "{params.cmd_cp_subj_dirs}"
 
 
+rule gradcorrect:
+    """
+    Apply gradient nonlinearity correction using the gradcorrect BIDS app.
+    Runs per-subject/session using the fixed BIDS staging data as input.
+    Only used when gradcorrect is enabled in the config (gradcorrect.enable: true).
+    Requires Singularity/Apptainer to run the container.
+    A dummy input BIDS directory (bids_in) is created in the cwd with only the
+    subject's data symlinked, so the app processes only one subject at a time.
+    Output is written to a dummy output dir (bids_out) in the cwd, then the
+    subject/session folder is moved to the final output path.
+    """
+    input:
+        bids_subj_dir=stage_fix / "bids-staging/sub-{subject}/ses-{session}",
+        dataset_description=stage_fix / "bids-staging/dataset_description.json",
+        bidsignore=stage_fix / "bids-staging/.bidsignore",
+    output:
+        bids_subj_dir=directory(
+            stage_gradcorr / "bids-staging/sub-{subject}/ses-{session}"
+        ),
+    params:
+        grad_coeff_file=gradcorrect_config.get("grad_coeff_file"),
+    log:
+        "logs/gradcorrect/sub-{subject}_ses-{session}.log",
+    threads: 2
+    resources:
+        mem_mb=40000,
+        runtime=240,
+    container:
+        "docker://khanlab/gradcorrect:v0.1.0"
+    shadow:
+        "minimal"
+    shell:
+        "mkdir -p bids_in/sub-{wildcards.subject} &> {log} && "
+        "ln -sr {input.dataset_description} bids_in/ &>> {log} && "
+        "ln -sr {input.bidsignore} bids_in/ &>> {log} && "
+        "ln -sr {input.bids_subj_dir} "
+        "bids_in/sub-{wildcards.subject}/ses-{wildcards.session} &>> {log} && "
+        "/.run bids_in bids_out participant "
+        "--grad_coeff_file {params.grad_coeff_file} &>> {log} && "
+        "mkdir -p $(dirname {output.bids_subj_dir}) &>> {log} && "
+        "mv bids_out/sub-{wildcards.subject}/ses-{wildcards.session} "
+        "{output.bids_subj_dir} &>> {log}"
+
+
 rule validate_fixed:
     input:
         bids_dir=stage_fix / "bids",
@@ -452,6 +609,37 @@ rule validate_fixed:
         # validate twice, to write to log, to txt, and to json
         "bids-validator-deno {input.bids_dir} --format text &> {log} || true && "
         "bids-validator-deno {input.bids_dir} --format json_pp -o {output.validator_json} || true"
+
+
+rule assemble_gradcorr_bids:
+    """
+    Assemble the gradcorr BIDS dataset from staging directory.
+    This ensures the BIDS directory is always clean and matches the requested subjects.
+    """
+    input:
+        dataset_description=stage_gradcorr / "bids-staging/dataset_description.json",
+        ignore=stage_gradcorr / "bids-staging/.bidsignore",
+        bids_subj_dirs=expand(
+            stage_gradcorr / "bids-staging/sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+    params:
+        cmd_cp_subj_dirs=get_cmd_cp_subj_dirs,
+    output:
+        bids_dir=directory(stage_gradcorr / "bids"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=60,
+    log:
+        "logs/assemble_gradcorr_bids/assemble.log",
+    shell:
+        "mkdir -p {output.bids_dir} &>> {log} && "
+        "cp {input.dataset_description} {output.bids_dir} &>> {log} && "
+        "cp {input.ignore} {output.bids_dir} &>> {log} && "
+        "{params.cmd_cp_subj_dirs}"
 
 
 rule subject_report_convert:
@@ -552,13 +740,36 @@ rule aggregate_report_fix:
         "scripts/generate_aggregate_all_report.py"
 
 
+rule assemble_final_bids:
+    """
+    Assemble the final BIDS dataset by copying from the fixed BIDS directory.
+    Now outputs individual session directories and top-level files as separate entities,
+    allowing for incremental updates instead of regenerating the entire directory.
+    Uses cp -RL to follow symlinks and copy actual files instead of broken symlinks.
+    When gradcorrect is enabled, subject/session dirs are sourced from the gradcorr stage.
+    """
+    input:
+        validator_txt=stage_for_assembly / "qc/final_bids_validator.txt",  # require validated
+        bids_subj_dir=stage_for_assembly / "bids-staging/sub-{subject}/ses-{session}",
+    output:
+        bids_subj_dir=directory(final_bids_dir / "sub-{subject}/ses-{session}"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=5,
+    localrule: True
+    log:
+        "logs/assemble_final_bids/sub-{subject}_ses-{session}.log",
+    shell:
+        "cp -RL {input.bids_subj_dir} {output.bids_subj_dir} &> {log}"
+
+
 rule validate_final:
     """final validation before copying, fails if invalid"""
     input:
-        validator_json=stage_fix / "qc/bids_validator.json",
-        bids_dir=stage_fix / "bids",
+        bids_dir=stage_for_assembly / "bids",
     output:
-        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        validator_txt=stage_for_assembly / "qc/final_bids_validator.txt",  # require validated
     threads: 1
     resources:
         mem_mb=4000,
@@ -567,21 +778,178 @@ rule validate_final:
         "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
 
 
-rule assemble_final_bids:
+if use_gradcorrect:
+
+    rule validate_final_uncorr:
+        """final validation before copying, fails if invalid"""
+        input:
+            bids_dir=stage_fix / "bids",
+        output:
+            validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        threads: 1
+        resources:
+            mem_mb=4000,
+            runtime=10,
+        shell:
+            "bids-validator-deno {input.bids_dir} --format text &> {output.validator_txt}"
+
+
+rule copy_final_bids_top_level_files:
     """
-    Assemble the final BIDS dataset by copying from the fixed BIDS directory.
-    This ensures the final BIDS directory is always clean and matches the requested subjects.
+    Copy top-level BIDS files (dataset_description.json, .bidsignore) to final BIDS directory.
+    These are tracked separately from session directories to allow incremental updates.
+    """
+    input:
+        validator_txt=stage_for_assembly / "qc/final_bids_validator.txt",  # require validated
+        src_file=stage_for_assembly / "bids-staging/{filename}",
+    output:
+        dst_file=final_bids_dir / "{filename}",
+    wildcard_constraints:
+        filename="dataset_description.json|.bidsignore",
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=1,
+    localrule: True
+    log:
+        "logs/assemble_final_bids/copy_{filename}.log",
+    shell:
+        "cp {input.src_file} {output.dst_file} &> {log}"
+
+
+rule assemble_final_bids_uncorr:
+    """
+    Assemble the uncorrected BIDS dataset from the fix stage.
+    Only used when gradcorrect is enabled and create_bids_uncorr is true in the config.
+    This provides the raw (non-resampled) data alongside the gradient-corrected dataset,
+    which is useful because the gradcorrect BIDS dataset has been resampled and may be
+    missing certain series (e.g. any series with online distortion correction are dropped).
     """
     input:
         validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
-        bids_dir=stage_fix / "bids",
+        bids_subj_dir=stage_fix / "bids-staging/sub-{subject}/ses-{session}",
     output:
-        bids_dir=directory(final_bids_dir),
+        bids_subj_dir=directory(final_bids_uncorr_dir / "sub-{subject}/ses-{session}"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=5,
+    localrule: True
+    log:
+        "logs/assemble_final_bids_uncorr/sub-{subject}_ses-{session}.log",
+    shell:
+        "cp -RL {input.bids_subj_dir} {output.bids_subj_dir} &> {log}"
+
+
+rule copy_final_bids_uncorr_top_level_files:
+    """
+    Copy top-level BIDS files (dataset_description.json, .bidsignore) to the uncorrected
+    BIDS directory. Only used when gradcorrect is enabled and create_bids_uncorr is true.
+    """
+    input:
+        validator_txt=stage_fix / "qc/final_bids_validator.txt",  # require validated
+        src_file=stage_fix / "bids-staging/{filename}",
+    output:
+        dst_file=final_bids_uncorr_dir / "{filename}",
+    wildcard_constraints:
+        filename="dataset_description.json|.bidsignore",
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=1,
+    localrule: True
+    log:
+        "logs/assemble_final_bids_uncorr/copy_{filename}.log",
+    shell:
+        "cp {input.src_file} {output.dst_file} &> {log}"
+
+
+rule clean:
+    """
+    Clean the final BIDS directory by removing files that are not part of the current dataset.
+    This rule finds extraneous files (mainly sub-*/ses-* directories) that should not be present
+    and removes them, keeping the directory clean when subjects/sessions are removed from the dataset.
+    """
+    input:
+        session_dirs=expand(
+            final_bids_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        dataset_description=final_bids_dir / "dataset_description.json",
+        bidsignore=final_bids_dir / ".bidsignore",
+    output:
+        clean_marker=touch(final_bids_dir / ".clean_marker"),
     threads: 1
     resources:
         mem_mb=4000,
         runtime=10,
     log:
-        "logs/assemble_final_bids/assemble.log",
-    shell:
-        "cp -R {input.bids_dir} {output.bids_dir} &> {log}"
+        "logs/clean_final_bids/clean.log",
+    script:
+        "scripts/clean_final_bids.py"
+
+
+rule clean_uncorr:
+    """
+    Clean the final uncorrected BIDS directory by removing files that are not part of the current dataset.
+    This rule finds extraneous files (mainly sub-*/ses-* directories) that should not be present
+    and removes them, keeping the directory clean when subjects/sessions are removed from the dataset.
+    """
+    input:
+        session_dirs=expand(
+            final_bids_uncorr_dir / "sub-{subject}/ses-{session}",
+            zip,
+            subject=subjects,
+            session=sessions,
+        ),
+        dataset_description=final_bids_uncorr_dir / "dataset_description.json",
+        bidsignore=final_bids_uncorr_dir / ".bidsignore",
+    output:
+        clean_marker=touch(final_bids_uncorr_dir / ".clean_marker"),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10,
+    log:
+        "logs/clean_final_uncorr_bids/clean.log",
+    script:
+        "scripts/clean_final_bids.py"
+
+
+if "spim" in config and config.get("link_to_spim", False):
+
+    ruleorder: link_spim > assemble_final_bids
+
+    rule link_spim:
+        input:
+            spim_zarr=lambda wildcards: config["spim"][wildcards.session]["inputs"][
+                "ome_zarr"
+            ].path,
+            spim_json=lambda wildcards: config["spim"][wildcards.session]["inputs"][
+                "json"
+            ].path,
+        params:
+            out_zarr=lambda wildcards, output: Path(output.bids_subj_dir)
+            / (
+                config["spim"][wildcards.session]["out_path"].format(**wildcards)
+                + ".ome.zarr"
+            ),
+            out_json=lambda wildcards, output: Path(output.bids_subj_dir)
+            / (
+                config["spim"][wildcards.session]["out_path"].format(**wildcards)
+                + ".json"
+            ),
+        output:
+            bids_subj_dir=directory(final_bids_dir / "sub-{subject}" / "ses-{session}"),
+        wildcard_constraints:
+            session="|".join(config["spim"].keys()),
+        threads: 1
+        localrule: True
+        log:
+            "logs/link_spim/sub-{subject}_ses-{session}.log",
+        shell:
+            "mkdir -p {output.bids_subj_dir}/micr && "
+            "ln -s {input.spim_zarr} {params.out_zarr} && "
+            "ln -s {input.spim_json} {params.out_json} "

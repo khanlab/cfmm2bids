@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          environments: dev
+          cache: true
+      
+      - name: Run unit tests
+        run: pixi run -e dev pytest workflow/lib/tests/test_bids_fixes.py -v
+      
+      - name: Run data fixture tests
+        run: pixi run -e dev pytest workflow/lib/tests/test_integration.py::TestDataFixtures -v
+      
+      - name: Run integration tests (dry-run)
+        run: pixi run -e dev pytest workflow/lib/tests/test_integration.py::TestSnakemakeDryRun -v
+      
+      - name: Run integration tests (dry-run, gradcorrect)
+        run: pixi run -e dev pytest workflow/lib/tests/test_integration.py::TestSnakemakeDryRunGradcorrect -v

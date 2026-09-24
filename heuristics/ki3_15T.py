@@ -110,6 +110,10 @@ def infotodict(seqinfo):
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TurboRARE_rec-denoised_run-{item:01d}_T2w"
     )
 
+    t2w_gre = create_key(
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-GRE_run-{item:01d}_T2starw"
+    )
+
     t2w_gre_mag = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-GRE_rec-orig_run-{item:01d}_part-mag_T2starw"
     )
@@ -143,28 +147,8 @@ def infotodict(seqinfo):
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-FLASH_run-{item:01d}_part-phase_T2starw"
     )
 
-    t2starw = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-FLASH_run-{item:01d}_T2starw"
-    )
-
     tof = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-TOF_run-{item:01d}_angio"
-    )
-
-    # pregad flash
-    t2starw_pregad_orig = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PreGadFLASH_rec-orig_run-{item:01d}_T2starw"
-    )
-    t2starw_pregad_den = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PreGadFLASH_rec-denoised_run-{item:01d}_T2starw"
-    )
-
-    # postgad flash
-    t2starw_postgad_orig = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PostGadFLASH_rec-orig_run-{item:01d}_T2starw"
-    )
-    t2starw_postgad_den = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-PostGadFLASH_rec-denoised_run-{item:01d}_T2starw"
     )
 
     # resting-state
@@ -182,6 +166,7 @@ def infotodict(seqinfo):
 
     info = {
         t2w_tse: [],
+        t2w_gre: [],
         t2w_gre_mag: [],
         t2w_gre_phase: [],
         t2w_gre_den: [],
@@ -189,14 +174,9 @@ def infotodict(seqinfo):
         t2w_rarevfl_den: [],
         t2w_turborare_orig: [],
         t2w_turborare_den: [],
-        t2starw: [],
         t2starw_mag: [],
         t2starw_swi: [],
         t2starw_phase: [],
-        t2starw_pregad_orig: [],
-        t2starw_pregad_den: [],
-        t2starw_postgad_orig: [],
-        t2starw_postgad_den: [],
         tof: [],
         t2w_pregad_orig: [],
         t2w_postgad_orig: [],
@@ -210,127 +190,22 @@ def infotodict(seqinfo):
     handled = set()
 
     # ---------------------------------------------------------------------------------------
-    # T2starw / SWI: assign in repeating triplets (Mag, SWI, Phase)
-    # Exclude complex data where image_type contains 'NON_PARALLEL'
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: ("swi" in s.series_description.lower())
-        or ("t2star" in s.series_description.lower()),
-        exclude=lambda s: any("NON_PARALLEL" in t for t in s.image_type),
-        keys=(t2starw_mag, t2starw_swi, t2starw_phase),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if a triplet is incomplete
-    )
-
-    # ---------------------------------------------------------------------------------------
-    # Pre/Post Gad FLASH T2starw: assign in repeating pairs (orig, denoised)
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: ("flash3d" in s.series_description.lower())
-        and ("pregad" in s.series_description.lower()),
-        exclude=lambda s: any("NON_PARALLEL" in t for t in s.image_type),
-        keys=(t2starw_pregad_orig, t2starw_pregad_den),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if a pair is incomplete
-    )
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: ("flash3d" in s.series_description.lower())
-        and ("postgad" in s.series_description.lower()),
-        exclude=lambda s: any("NON_PARALLEL" in t for t in s.image_type),
-        keys=(t2starw_postgad_orig, t2starw_postgad_den),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if a pair is incomplete
-    )
-
-    # T2w RareVFL: assign in repeating pairs (orig, denoised)
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: "rarevfl" in s.protocol_name.lower(),
-        keys=(t2w_rarevfl_orig, t2w_rarevfl_den),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if the pair is incomplete
-    )
-
-    # T2w TurboRare: assign in repeating pairs (orig, denoised)
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: "turborare" in s.protocol_name.lower(),
-        keys=(t2w_turborare_orig, t2w_turborare_den),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if the pair is incomplete
-    )
-
-    # GRE "pre/post gad by inference" special case:
-    # - collect Gre3Dinvivo
-    # - if last one looks like post, split by whether "post" appears in description
-    gre_candidates = [s for s in seqinfo if "Gre3Dinvivo" in s.series_description]
-    gre_candidates.sort(key=lambda s: s.series_id)
-
-    # first handle the special case (certain subjects where Pre not labelled, and
-    # exactly 7 scans exist, these are 2x Pre -> 5x Post, all orig (no denoised)
-    if len(gre_candidates) == 7:
-        for s in gre_candidates:
-            if "post" in s.series_description.lower():
-                info[t2w_postgad_orig].append(s.series_id)
-            else:
-                info[t2w_pregad_orig].append(s.series_id)
-            handled.add(s.series_id)
-
-    # for remaining cases, assign in repeating pairs (orig, denoised)
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: ("gre3dinvivo" in s.series_description.lower())
-        and ("post" in s.series_description.lower()),
-        keys=(t2w_postgad_orig, t2w_postgad_den),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if the pair is incomplete
-    )
-
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: ("gre3dinvivo" in s.series_description.lower())
-        and ("pre" in s.series_description.lower()),
-        keys=(t2w_pregad_orig, t2w_pregad_den),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if the pair is incomplete
-    )
-
-    # T2starw GRE: assign in repeating triplets (Mag, Phase, Denoised)
-    assign_series_by_pattern(
-        seqinfo,
-        match=lambda s: "gre3dinvivo" in s.series_description.lower(),
-        keys=(t2w_gre_mag, t2w_gre_phase, t2w_gre_den),
-        info=info,
-        handled=handled,
-        drop_incomplete_tail=True,  # safer if a triplet is incomplete
-    )
-
-    # ---------------------------------------------------------------------------------------
     # Main assignment loop for everything else
     for s in seqinfo:
         if s.series_id in handled:
             continue
+        if "gre" in s.series_description.lower():
+            info[t2w_gre].append(s.series_id)
 
-        if "tse2d" in s.series_description:
+        elif "tse2d" in s.series_description:
             info[t2w_tse].append(s.series_id)
-
-        elif "FLASH_3D_SWI_2AVG" in s.series_description:
-            info[t2starw].append(s.series_id)
 
         elif "TOF3D" in s.series_description:
             info[tof].append(s.series_id)
 
         # Resting-state
         elif "rsfMRI" in s.series_description:
-            if "RPE" in s.series_description or "RV" in s.series_description:
+            if "RPE" in s.series_description:
                 info[func_resting_RV].append(s.series_id)
             else:
                 info[func_resting_R].append(s.series_id)

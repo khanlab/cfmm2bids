@@ -39,47 +39,68 @@ make_tree_writable(dst)
 
 
 num_changes = 0
-for fix in fixes:
-    name = fix.get("name", "unnamed_fix")
-    pattern = fix["pattern"]
-    action = fix["action"]
+fixes_used = []
+if fixes is not None:
+    for fix in fixes:
+        name = fix.get("name", "unnamed_fix")
+        action = fix["action"]
 
-    meta = bids_fixes.FIX_REGISTRY.get(action)
+        meta = bids_fixes.FIX_REGISTRY.get(action)
 
-    if meta is None:
-        raise ValueError(f"Unknown fix type: {action}")
+        if meta is None:
+            raise ValueError(f"Unknown fix type: {action}")
 
-    func = meta.get("func")
-    grouped = bool(meta.get("grouped", False))
+        func = meta.get("func")
+        grouped = bool(meta.get("grouped", False))
+        scope = meta.get("scope", "path")
 
-    logger.info(f"\n=== Applying fix: {name} ({action}) ===")
-    matches = list(dst.rglob(pattern))
-    if not matches:
-        logger.info(f"  ⚠️ No matches for pattern: {pattern}")
-        continue
+        logger.info(f"\n=== Applying fix: {name} ({action}) ===")
 
-    try:
-        if grouped:
-            # pass the whole list of Path objects and the fix dict
-            added = func(matches, fix)
-            num_changes += added
-            logger.info(f"  grouped handler returned: {added}")
-        else:
-            # per-file handler: call once per match
-            for path in matches:
-                try:
-                    changed = func(path, fix)
-                except Exception:
-                    logger.error(f"  Exception running handler for {path}:")
-                    logger.error(traceback.format_exc())
-                    changed = False
-                if changed:
-                    num_changes += 1
-    except Exception:
-        logger.error(f"  Exception running fix '{name}' ({action}):")
-        logger.error(traceback.format_exc())
-        # continue to next fix
+        try:
+            if scope == "session":
+                session_fix = {
+                    **fix,
+                    "subject": snakemake.wildcards.subject,
+                    "session": snakemake.wildcards.session,
+                }
+                added = func(dst, session_fix)
+                num_changes += added
+                logger.info(f"  session handler returned: {added}")
+            else:
+                pattern = fix.get("pattern")
+                if not pattern:
+                    raise ValueError(
+                        f'Fix "{name}" ({action}) with scope "path" requires a '
+                        '"pattern" field.'
+                    )
 
+                matches = list(dst.rglob(pattern))
+                if not matches:
+                    logger.info(f"  ⚠️ No matches for pattern: {pattern}")
+                    continue
+
+                if grouped:
+                    # pass the whole list of Path objects and the fix dict
+                    added = func(matches, fix)
+                    num_changes += added
+                    logger.info(f"  grouped handler returned: {added}")
+                else:
+                    # per-file handler: call once per match
+                    for path in matches:
+                        try:
+                            changed = func(path, fix)
+                        except Exception:
+                            logger.error(f"  Exception running handler for {path}:")
+                            logger.error(traceback.format_exc())
+                            changed = False
+                        if changed:
+                            num_changes += 1
+        except Exception:
+            logger.error(f"  Exception running fix '{name}' ({action}):")
+            logger.error(traceback.format_exc())
+            # continue to next fix
+
+    fixes_used = [f["action"] for f in fixes]
 
 logger.info(f"✅ Done with {src.name}: {num_changes} files modified.")
 
@@ -90,7 +111,7 @@ Path(snakemake.output.prov_json).write_text(
         {
             "subject": snakemake.wildcards.subject,
             "session": snakemake.wildcards.session,
-            "fixes_used": [f["action"] for f in fixes],
+            "fixes_used": fixes_used,
             "files_modified": num_changes,
         },
         indent=2,
