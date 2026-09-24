@@ -69,7 +69,7 @@ post_convert_fixes:
     pattern: "**/*MTw*"
     action: remove  # ou plutôt ajouter à .bidsignore
   - name: add_resolution_json_ogse
-    pattern: "dwi/*acq-ogse_res-150iso_dwi.json"
+    pattern: "dwi/*acq-multidwienc_res-150iso_dwi.json"
     action: update_json
     updates:
       Resolution: "150iso"

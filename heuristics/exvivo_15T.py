@@ -1,6 +1,7 @@
 import fnmatch
 import re
-
+#from custom.bruker import custom_callable
+from custom.exvivo_extras import custom_callable
 
 def create_key(template, outtype=("nii.gz",), annotation_classes=None):
     if template is None or not template:
@@ -30,8 +31,8 @@ def infotodict(seqinfo):
     dwi_b2kb4kb6k = create_key(
         "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-b2kb4kb6k_dwi"
     )
-    dwi_ogse = create_key(
-        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-ogse_res-150iso_dwi"
+    dwi_multidwienc = create_key(
+        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-multidwienc_res-150iso_dwi"
     )
 
     # ── MEGRE QSM (9 echoes) ─────────────────────────────────────────────────
@@ -84,7 +85,7 @@ def infotodict(seqinfo):
 
     info = {
         dwi_b2kb4kb6k:          [],
-        dwi_ogse:                [],
+        dwi_multidwienc:                [],
         megre_qsm_mag:           [],
         megre_qsm_mag_denoised:  [],
         megre_qsm_imag:          [],
@@ -115,7 +116,7 @@ def infotodict(seqinfo):
             info[dwi_b2kb4kb6k].append(s.series_id)
 
         elif fnmatch.fnmatch(desc, "Diff3D_OGSE_uFA_150iso*"):
-            info[dwi_ogse].append(s.series_id)
+            info[dwi_multidwienc].append(s.series_id)
 
         # ── MEGRE QSM 9-Echo ─────────────────────────────────────────────────
         elif fnmatch.fnmatch(desc, "Gre3D_QSM_9Echo_ISO100_1A*"):
@@ -137,14 +138,16 @@ def infotodict(seqinfo):
                     info[megre_qsm_imag].append(s.series_id)
                     seen.add(("megre_complex_denoised",))
 
-        # ── MP2RAGE ──────────────────────────────────────────────────────────
-        elif fnmatch.fnmatch(s.protocol_name or "", "MP2RAGE_2Echo_100iso*"):
-            if s.dim3 == 100 and "VOLUME" in (s.image_type or ""):
+        # ── MP2RAGE ──────────────────────────────────────────────────────────────
+        # series_description = "MP2RAGE_2Echo_100iso" (protocol_name = "cfmmMPRAGE").
+        # UNI : dim3=100 (volume 3D unique). INV1+INV2 : dim3=200 (concatenated → 4D 100x2).
+        elif fnmatch.fnmatch(s.series_description or "", "MP2RAGE_2Echo_100iso*"):
+            if s.dim3 == 100:
                 key = ("mp2rage_uni",)
                 if key not in seen:
                     info[mp2rage_uni].append(s.series_id)
                     seen.add(key)
-            elif s.dim3 == 200 and "NON_PARALLEL" in (s.image_type or ""):
+            elif s.dim3 == 200:
                 key = ("mp2rage_4d",)
                 if key not in seen:
                     info[mp2rage_4d].append(s.series_id)
