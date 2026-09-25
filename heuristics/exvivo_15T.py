@@ -19,7 +19,7 @@ def infotodict(seqinfo):
       The first is the raw reconstruction; the second is Bruker-denoised.
       Identified by series_id order (lower = raw, higher = denoised).
     - MEGRE QSM (Gre3D_QSM_9Echo_ISO100_1A):
-        dim3=720  → magnitude (9 echoes × 80 slices): 50001=raw, 50006=denoised
+        dim3=720  → magnitude (9 echoes × 80 slices): first=raw, second=denoised
         dim3=2880 → real + imag concatenated (720 × 4), used for MCPC-3D-S
     - MP2RAGE (MP2RAGE_2Echo_100iso):
         dim3=100, VOLUME       → Bruker UNI reconstruction (single, no denoised copy)
@@ -28,11 +28,11 @@ def infotodict(seqinfo):
     """
 
     # ── DWI ──────────────────────────────────────────────────────────────────
-    dwi_b2kb4kb6k = create_key(
-        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-b2kb4kb6k_dwi"
+    dwi_pgsebruker = create_key(
+        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-pgsebruker_dwi"
     )
     dwi_multidwienc = create_key(
-        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-multidwienc_res-150iso_dwi"
+        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-multidwienc_dwi"
     )
 
     # ── MEGRE QSM (9 echoes) ─────────────────────────────────────────────────
@@ -56,32 +56,32 @@ def infotodict(seqinfo):
 
     # ── Structural ───────────────────────────────────────────────────────────
     mtw = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-6p5uT5p5kHz_res-100iso_MTw"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-6p5uT5p5kHz_MTw"
     )
     mtw_denoised = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-6p5uT5p5kHz_res-100iso_rec-denoised_MTw"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-6p5uT5p5kHz_rec-denoised_MTw"
     )
     t1w_flash = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-flash_res-50iso_T1w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-flash_T1w"
     )
     t1w_flash_denoised = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-flash_res-50iso_rec-denoised_T1w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-flash_rec-denoised_T1w"
     )
     t1w_refmt = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-refMT_res-100iso_T1w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-refMT_T1w"
     )
     t1w_refmt_denoised = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-refMT_res-100iso_rec-denoised_T1w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-refMT_rec-denoised_T1w"
     )
     t2w = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-rare_res-100iso_T2w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-rare_T2w"
     )
     t2w_denoised = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-rare_res-100iso_rec-denoised_T2w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-rare_rec-denoised_T2w"
     )
 
     info = {
-        dwi_b2kb4kb6k:           [],
+        dwi_pgsebruker:          [],
         dwi_multidwienc:         [],
         megre_qsm_mag:           [],
         megre_qsm_mag_denoised:  [],
@@ -109,7 +109,7 @@ def infotodict(seqinfo):
 
         # ── DWI ──────────────────────────────────────────────────────────────
         if fnmatch.fnmatch(desc, "Diff3D_10b0_30B2k_45B4k_60B6k_125iso*"):
-            info[dwi_b2kb4kb6k].append(s.series_id)
+            info[dwi_pgsebruker].append(s.series_id)
 
         elif fnmatch.fnmatch(desc, "Diff3D_OGSE_uFA_150iso*"):
             info[dwi_multidwienc].append(s.series_id)

@@ -6,14 +6,14 @@
 # Final output directory for the BIDS dataset (REQUIRED)
 # Absolute or relative paths can be used, will be relative to working folder
 # Default: "bids"
-final_bids_dir: /nfs/khan/trainees/larcamon/khanproject/DATA/Khan_Trip_KI_Char_exvivo_dev
+final_bids_dir: name
 
 stages:
-  query: /nfs/khan/trainees/larcamon/khanproject/DATA/Khan_Trip_KI_Char_exvivo_dev/0_query
-  filter: /nfs/khan/trainees/larcamon/khanproject/DATA/Khan_Trip_KI_Char_exvivo_dev/1_filter
-  download: /nfs/khan/trainees/larcamon/khanproject/DATA/Khan_Trip_KI_Char_exvivo_dev/2_download
-  convert: /nfs/khan/trainees/larcamon/khanproject/DATA/Khan_Trip_KI_Char_exvivo_dev/3_convert
-  fix: /nfs/khan/trainees/larcamon/khanproject/DATA/Khan_Trip_KI_Char_exvivo_dev/4_fix
+  query: ./0_query
+  filter: ./1_filter
+  download: ./2_download
+  convert: ./3_convert
+  fix: ./4_fix
 
 # Final output directory for the uncorrected BIDS dataset (OPTIONAL)
 # Only used when gradcorrect is enabled and gradcorrect.create_bids_uncorr is true.
@@ -55,7 +55,7 @@ study_filter_specs:
 credentials_file: ~/.uwo_credentials
 cfmm2tar_download_options: "--skip-derived"
 merge_duplicate_studies: false
-download_cache: /nfs/khan/trainees/larcamon/khanproject/DATA/Khan_Trip_KI_Char_exvivo/download_cache
+download_cache: ./download_cache
 
 # ── Fixes post-conversion ─────────────────────────────────────────────────────
 post_convert_fixes:
@@ -68,34 +68,6 @@ post_convert_fixes:
   - name: add_bidsignore
     pattern: "**/*MTw*"
     action: remove 
-  - name: add_resolution_json_ogse
-    pattern: "dwi/*acq-multidwienc_res-150iso_dwi.json"
-    action: update_json
-    updates:
-      Resolution: "150iso"
-  - name: add_resolution_json_t1w_flash
-    pattern: "anat/*acq-flash_res-50iso_T1w.json"
-    action: update_json
-    updates:
-      Resolution: "50iso"
-  - name: add_resolution_json_t1w_refmt
-    pattern: "anat/*acq-refMT_res-100iso_T1w.json"
-    action: update_json
-    updates:
-      Resolution: "100iso"
-  - name: add_resolution_json_t2w
-    pattern: "anat/*acq-rare_res-100iso_T2w.json"
-    action: update_json
-    updates:
-      Resolution: "100iso"
-    
-  # Add the import regenerated bval/bvec here, if necessary :
-  # - name: import_bval_b2kb4kb6k
-  #   action: copy_from_path
-  #   src: "/path/to/bval_bvec/acq-b2kb4kb6k_dwi.bval"
-  #   dst: "dwi/sub-{subject}_ses-{session}_acq-b2kb4kb6k_dwi.bval"
-  #   required: true
-
 
 default-resources:
   slurm_extra: "'--export=UWO_USERNAME,UWO_PASSWORD'"
