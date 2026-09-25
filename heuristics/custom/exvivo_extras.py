@@ -6,16 +6,19 @@ Routing by BIDS suffix of the prefix:
   *_dwi      → bvec/bval delegated to custom.bruker (manages the OGSE), + .bmat
   *_MP2RAGE  → split of the 4D [X,Y,Z,2] into inv-1/inv-2 + JSON sidecars (Bruker parameters)
 """
+
+import glob
 import json
 import logging
+import os
 import re
 from pathlib import Path
-import numpy as np
+
 import nibabel as nib
+import numpy as np
 import pydicom
-import glob
-import os
-from custom.bruker import get_bvec_bval, write_bvec_bval  
+
+from custom.bruker import get_bvec_bval, write_bvec_bval
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +28,7 @@ GAMMA_H = 42.577478518  # (MHz/T)
 
 # ── Parser JCAMP-DX ─────────────────────────────
 
+
 def parse_method(lines: list) -> dict:
     """Parses the Bruker PV360 (JCAMP-DX) method file. Keys without ‘$’.
     Returns {key: [tokens]} (consumed dimension) or {key: ‘string’}."""
@@ -32,7 +36,7 @@ def parse_method(lines: list) -> dict:
     i = 0
     while i < len(lines):
         line = lines[i].strip()
-        m = re.match(r'^##\$(\w+)=(.*)$', line)
+        m = re.match(r"^##\$(\w+)=(.*)$", line)
         if not m:
             i += 1
             continue
@@ -40,9 +44,9 @@ def parse_method(lines: list) -> dict:
         key = m.group(1)
         rest = m.group(2).strip()
 
-        arr_m = re.match(r'^\(\s*([\d,\s]+)\)\s*(.*)', rest)
+        arr_m = re.match(r"^\(\s*([\d,\s]+)\)\s*(.*)", rest)
         if arr_m:
-            dims = [int(d) for d in re.split(r'[\s,]+', arr_m.group(1).strip()) if d]
+            dims = [int(d) for d in re.split(r"[\s,]+", arr_m.group(1).strip()) if d]
             total = 1
             for d in dims:
                 total *= d
@@ -51,7 +55,7 @@ def parse_method(lines: list) -> dict:
             j = i + 1
             while j < len(lines):
                 next_line = lines[j].strip()
-                if next_line.startswith('##'):
+                if next_line.startswith("##"):
                     break
                 tokens += next_line.split()
                 j += 1
@@ -104,6 +108,7 @@ def read_method(dcm_path) -> dict | None:
 
 # ── DWI : .bmat (bvec/bval sont gérés par custom.bruker) ─────────────────────
 
+
 def write_bmat(method: dict, out_basename: str):
     """Wrote {out_basename}.bmat (9 lines) from PVM_DwBMat.
     parse_method has already processed the header (n,3,3) → no offset, unlike
@@ -120,6 +125,7 @@ def write_bmat(method: dict, out_basename: str):
 
 
 # ── MP2RAGE : extraction params + split 4D (ton code, verbatim) ──────────────
+
 
 def extract_mp2rage_params(method: dict) -> dict:
     """MP2RAGE settings with official BIDS names."""
@@ -147,12 +153,14 @@ def extract_mp2rage_params(method: dict) -> dict:
         number_shots = None
 
     missing = []
-    for name, val in [("MagneticFieldStrength", b0),
-                      ("RepetitionTimePreparation", rtp),
-                      ("RepetitionTimeExcitation", rte),
-                      ("InversionTime", tis or None),
-                      ("FlipAngle", fas or None),
-                      ("NumberShots", number_shots)]:
+    for name, val in [
+        ("MagneticFieldStrength", b0),
+        ("RepetitionTimePreparation", rtp),
+        ("RepetitionTimeExcitation", rte),
+        ("InversionTime", tis or None),
+        ("FlipAngle", fas or None),
+        ("NumberShots", number_shots),
+    ]:
         if val is None or val == []:
             missing.append(name)
             logger.warning("MP2RAGE parameter missing: %s", name)
@@ -161,8 +169,8 @@ def extract_mp2rage_params(method: dict) -> dict:
         "MagneticFieldStrength": b0,
         "RepetitionTimePreparation": rtp,
         "RepetitionTimeExcitation": rte,
-        "InversionTime": tis,   # [TI1, TI2]
-        "FlipAngle": fas,       # [FA1, FA2]
+        "InversionTime": tis,  # [TI1, TI2]
+        "FlipAngle": fas,  # [FA1, FA2]
         "NumberShots": number_shots,
         "_missing": missing,
     }
@@ -217,8 +225,8 @@ def write_sidecar(sidecar: dict, nii_path: Path):
     logger.info("Sidecar written : %s", json_path)
 
 
-
 # ── MEGRE complex part correction  ──────────────────────────────────
+
 
 def relabel_complex_megre(prefix):
     """dcm2niix splits the complex series into {prefix}1.nii.gz / {prefix}2.nii.gz.
@@ -236,14 +244,19 @@ def relabel_complex_megre(prefix):
     for nii in sorted(glob.glob(f"{prefix}[0-9]*.nii.gz")):
         js = nii[: -len(".nii.gz")] + ".json"
         if not os.path.exists(js):
-            logger.warning("MEGRE complexe: sidecar absent pour %s ; laissé tel quel", nii)
+            logger.warning(
+                "MEGRE complexe: sidecar absent pour %s ; laissé tel quel", nii
+            )
             continue
 
         # ── Primary routing: sidecar's ImageType ──────────────────────
         try:
             itype = json.load(open(js)).get("ImageType", [])
         except Exception:
-            logger.exception("MEGRE complexe: lecture ImageType échouée pour %s ; laissé tel quel", js)
+            logger.exception(
+                "MEGRE complexe: lecture ImageType échouée pour %s ; laissé tel quel",
+                js,
+            )
             continue
 
         if "REAL" in itype:
@@ -253,7 +266,8 @@ def relabel_complex_megre(prefix):
         else:
             logger.warning(
                 "MEGRE complexe: ImageType=%s sans REAL/IMAGINARY pour %s ; laissé tel quel",
-                itype, os.path.basename(nii),
+                itype,
+                os.path.basename(nii),
             )
             continue
 
@@ -265,16 +279,24 @@ def relabel_complex_megre(prefix):
                 logger.warning(
                     "MEGRE complexe: %s → ImageType dit part-%s mais numéro %s "
                     "attendait part-%s — CONTRÔLER (correspondance numéro/type incohérente).",
-                    os.path.basename(nii), part, m.group(1), exp,
+                    os.path.basename(nii),
+                    part,
+                    m.group(1),
+                    exp,
                 )
 
         newbase = f"{stem}_part-{part}_MEGRE"
         os.replace(nii, newbase + ".nii.gz")
         os.replace(js, newbase + ".json")
-        logger.info("MEGRE complexe: %s → %s.nii.gz", os.path.basename(nii),
-                    os.path.basename(newbase))
+        logger.info(
+            "MEGRE complexe: %s → %s.nii.gz",
+            os.path.basename(nii),
+            os.path.basename(newbase),
+        )
+
 
 # ── Hook heudiconv ───────────────────────────────────────────────────────────
+
 
 def custom_callable(prefix, outtypes, item_dicoms):
     logger.debug("custom_callable: prefix=%s", prefix)
@@ -302,7 +324,7 @@ def custom_callable(prefix, outtypes, item_dicoms):
             if not nii.exists():
                 logger.warning("MP2RAGE 4D not found : %s ; skip.", nii)
                 return
-            base = prefix[:-len("_MP2RAGE")]
+            base = prefix[: -len("_MP2RAGE")]
 
             existing = {}
             dcm2niix_json = Path(f"{prefix}.json")
@@ -320,4 +342,6 @@ def custom_callable(prefix, outtypes, item_dicoms):
             dcm2niix_json.unlink(missing_ok=True)
 
     except Exception:
-        logger.exception("custom_callable: failed on %s (other series are not affected)", prefix)
+        logger.exception(
+            "custom_callable: failed on %s (other series are not affected)", prefix
+        )

@@ -37,8 +37,8 @@ heudiconv_options: "--minmeta --use-enhanced-dicom"
 # ── Query DICOM ──────────────────────────────────────────────────────────────
 search_specs:
   - dicom_query:
-      study_description: "Khan^Trip-KI-Char-exvivo"   
-      study_date: "20260601-"               
+      study_description: "Khan^Trip-KI-Char-exvivo"
+      study_date: "20260601-"
     metadata_mappings:
       subject:
         source: PatientName
@@ -67,7 +67,7 @@ post_convert_fixes:
     action: remove
   - name: add_bidsignore
     pattern: "**/*MTw*"
-    action: remove 
+    action: remove
 
 default-resources:
   slurm_extra: "'--export=UWO_USERNAME,UWO_PASSWORD'"

@@ -1,7 +1,7 @@
 import fnmatch
-import re
-#from custom.bruker import custom_callable
-from custom.exvivo_extras import custom_callable
+
+# from custom.bruker import custom_callable
+
 
 def create_key(template, outtype=("nii.gz",), annotation_classes=None):
     if template is None or not template:
@@ -81,21 +81,21 @@ def infotodict(seqinfo):
     )
 
     info = {
-        dwi_pgsebruker:          [],
-        dwi_multidwienc:         [],
-        megre_qsm_mag:           [],
-        megre_qsm_mag_denoised:  [],
-        megre_qsm_complex:       [],
-        mp2rage_uni:             [],
-        mp2rage_4d:              [],
-        mtw:                     [],
-        mtw_denoised:            [],
-        t1w_flash:               [],
-        t1w_flash_denoised:      [],
-        t1w_refmt:               [],
-        t1w_refmt_denoised:      [],
-        t2w:                     [],
-        t2w_denoised:            [],
+        dwi_pgsebruker: [],
+        dwi_multidwienc: [],
+        megre_qsm_mag: [],
+        megre_qsm_mag_denoised: [],
+        megre_qsm_complex: [],
+        mp2rage_uni: [],
+        mp2rage_4d: [],
+        mtw: [],
+        mtw_denoised: [],
+        t1w_flash: [],
+        t1w_flash_denoised: [],
+        t1w_refmt: [],
+        t1w_refmt_denoised: [],
+        t2w: [],
+        t2w_denoised: [],
     }
 
     # Track already-mapped descriptions to distinguish raw vs denoised.
@@ -104,8 +104,7 @@ def infotodict(seqinfo):
     seen = set()
 
     for s in seqinfo:
-        desc  = s.series_description or ""
-        itype = s.image_type
+        desc = s.series_description or ""
 
         # ── DWI ──────────────────────────────────────────────────────────────
         if fnmatch.fnmatch(desc, "Diff3D_10b0_30B2k_45B4k_60B6k_125iso*"):
@@ -124,7 +123,9 @@ def infotodict(seqinfo):
                     info[megre_qsm_mag_denoised].append(s.series_id)
                     seen.add(("megre_mag_denoised",))
             elif s.dim3 == 2880:
-                info[megre_qsm_complex].append(s.series_id)   # if two complex files are available so it's two reconstruction not a second run 
+                info[megre_qsm_complex].append(
+                    s.series_id
+                )  # if two complex files are available so it's two reconstruction not a second run
 
         # ── MP2RAGE ──────────────────────────────────────────────────────────────
         # series_description = "MP2RAGE_2Echo_100iso" (protocol_name = "cfmmMPRAGE").
