@@ -102,12 +102,6 @@ def read_method(dcm_path) -> dict | None:
     return parse_method(text.splitlines())
 
 
-def dump_method_json(method: dict, out_basename: str):
-    with open(f"{out_basename}_method.json", "w", encoding="utf-8") as f:
-        json.dump(method, f, indent=2)
-    logger.info("_method.json written : %s_method.json", out_basename)
-
-
 # ── DWI : .bmat (bvec/bval sont gérés par custom.bruker) ─────────────────────
 
 def write_bmat(method: dict, out_basename: str):
@@ -217,7 +211,7 @@ def split_mp2rage_4d(nifti_path, base_prefix: str) -> list:
 
 
 def write_sidecar(sidecar: dict, nii_path: Path):
-    json_path = nii_path.with_suffix("").with_suffix(".json")  # retire .gz puis .nii
+    json_path = nii_path.with_suffix("").with_suffix(".json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(sidecar, f, indent=2)
     logger.info("Sidecar written : %s", json_path)
@@ -294,7 +288,6 @@ def custom_callable(prefix, outtypes, item_dicoms):
             method = read_method(dcm)
             if method:
                 write_bmat(method, prefix)
-                dump_method_json(method, prefix)
 
         elif suffix == "MP2RAGE":
             nii = Path(f"{prefix}.nii.gz")
@@ -314,9 +307,6 @@ def custom_callable(prefix, outtypes, item_dicoms):
             inv_paths = split_mp2rage_4d(nii, base)
             for inv_idx, p in enumerate(inv_paths, start=1):
                 write_sidecar(build_sidecar(params, inv_idx, existing), p)
-
-            if method:
-                dump_method_json(method, base)
 
             nii.unlink(missing_ok=True)
             dcm2niix_json.unlink(missing_ok=True)
