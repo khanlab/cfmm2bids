@@ -3,7 +3,7 @@
 Hook heudiconv (custom_callable) for ex vivo acquisitions on the Bruker PV360 at 15 T.
 
 Routing by BIDS suffix of the prefix:
-  *_dwi      → bvec/bval delegated to custom.bruker (manages the OGSE), + .bmat + _method.json
+  *_dwi      → bvec/bval delegated to custom.bruker (manages the OGSE), + .bmat
   *_MP2RAGE  → split of the 4D [X,Y,Z,2] into inv-1/inv-2 + JSON sidecars (Bruker parameters)
 """
 import json
@@ -220,51 +220,59 @@ def write_sidecar(sidecar: dict, nii_path: Path):
 
 # ── MEGRE complex part correction  ──────────────────────────────────
 
-_MEGRE_NUM_TO_PART = {"1": "imag", "2": "real"}
-
-
 def relabel_complex_megre(prefix):
-    """dcm2niix splitte la série complexe en {prefix}1.nii.gz / {prefix}2.nii.gz.
-    Renommage en part-imag / part-real d'après le NUMÉRO (1=imag, 2=real, vérifié
-    sur données de référence), avec contrôle croisé sur ImageType du sidecar.
+    """dcm2niix splits the complex series into {prefix}1.nii.gz / {prefix}2.nii.gz.
+    Renames them to “part-real” and “part-imag” based on the ImageType in the JSON sidecar
+    (REAL / IMAGINARY), primary source. The suffix number is used solely
+    for cross-checking (reference: 1=imag, 2=real).
 
-    prefix se termine par '_MEGRE' (ex: ..._acq-qsm_run-01_MEGRE).
+    prefix ends with ‘_MEGRE’ (e.g., ..._acq-qsm_run-01_MEGRE).
     """
-    stem = prefix[: -len("_MEGRE")]  
+    stem = prefix[: -len("_MEGRE")]  # ..._acq-qsm_run-01
+
+    # Expected correspondence: number→portion, for cross-checking only
+    expected_by_num = {"1": "imag", "2": "real"}
 
     for nii in sorted(glob.glob(f"{prefix}[0-9]*.nii.gz")):
-        m = re.search(r"_MEGRE(\d+)\.nii\.gz$", nii)
-        if not m:
-            continue
-        num = m.group(1)
-        part = _MEGRE_NUM_TO_PART.get(num)
-        if part is None:
-            logger.warning("MEGRE complexe: numéro inattendu %s (%s) ; laissé tel quel",
-                           num, nii)
-            continue
-
         js = nii[: -len(".nii.gz")] + ".json"
+        if not os.path.exists(js):
+            logger.warning("MEGRE complexe: sidecar absent pour %s ; laissé tel quel", nii)
+            continue
 
-        if os.path.exists(js):
-            try:
-                itype = json.load(open(js)).get("ImageType", [])
-                itype_str = " ".join(str(x) for x in itype)
-                expected = {"real": "REAL", "imag": "IMAGINARY"}[part]
-                if expected not in itype_str:
-                    logger.warning(
-                        "MEGRE complexe: %s mappé part-%s (num %s) mais ImageType=%s "
-                        "ne contient pas %s — VÉRIFIER la correspondance.",
-                        os.path.basename(nii), part, num, itype, expected,
-                    )
-            except Exception:
-                logger.exception("MEGRE complexe: lecture ImageType échouée pour %s", js)
+        # ── Primary routing: sidecar's ImageType ──────────────────────
+        try:
+            itype = json.load(open(js)).get("ImageType", [])
+        except Exception:
+            logger.exception("MEGRE complexe: lecture ImageType échouée pour %s ; laissé tel quel", js)
+            continue
+
+        if "REAL" in itype:
+            part = "real"
+        elif "IMAGINARY" in itype:
+            part = "imag"
+        else:
+            logger.warning(
+                "MEGRE complexe: ImageType=%s sans REAL/IMAGINARY pour %s ; laissé tel quel",
+                itype, os.path.basename(nii),
+            )
+            continue
+
+        # ── Cross-check: suffix number vs. ImageType ─────────────
+        m = re.search(r"_MEGRE(\d+)\.nii\.gz$", nii)
+        if m:
+            exp = expected_by_num.get(m.group(1))
+            if exp is not None and exp != part:
+                logger.warning(
+                    "MEGRE complexe: %s → ImageType dit part-%s mais numéro %s "
+                    "attendait part-%s — CONTRÔLER (correspondance numéro/type incohérente).",
+                    os.path.basename(nii), part, m.group(1), exp,
+                )
 
         newbase = f"{stem}_part-{part}_MEGRE"
         os.replace(nii, newbase + ".nii.gz")
-        if os.path.exists(js):
-            os.replace(js, newbase + ".json")
-        logger.info("MEGRE complexe: %s → %s", os.path.basename(nii),
-                    os.path.basename(newbase + ".nii.gz"))
+        os.replace(js, newbase + ".json")
+        logger.info("MEGRE complexe: %s → %s.nii.gz", os.path.basename(nii),
+                    os.path.basename(newbase))
 
 # ── Hook heudiconv ───────────────────────────────────────────────────────────
 
