@@ -5,6 +5,8 @@ Hook heudiconv (custom_callable) for ex vivo acquisitions on the Bruker PV360 at
 Routing by BIDS suffix of the prefix:
   *_dwi      → bvec/bval delegated to custom.bruker (manages the OGSE), + .bmat
   *_MP2RAGE  → split of the 4D [X,Y,Z,2] into inv-1/inv-2 + JSON sidecars (Bruker parameters)
+  *_MTw  → split of the 4D [X,Y,Z,2] into flip-1_mt-off/flip-1_mt-on + JSON sidecars (MagnetizationTransfer)
+  *_MEGRE  → split complex data into part-imag and part-real based on JSON sidecars
 """
 
 import glob
@@ -124,7 +126,37 @@ def write_bmat(method: dict, out_basename: str):
     logger.info(".bmat written : %s.bmat (%d volumes)", out_basename, bmat.shape[1])
 
 
-# ── MP2RAGE : extraction params + split 4D (ton code, verbatim) ──────────────
+
+# ── Magnetization Transfert: split 4D + rename   ──────────────
+
+def split_mt3d_to_mts(nifti_path, base_prefix, fa_value=9):
+    """Split the MT3D 4D [X,Y,Z,2] into two MTS files: vol. 0 = MToff, vol. 1 = MTon.
+    base_prefix = prefix WITHOUT suffix; entities are already in the correct BIDS order
+    """
+    img = nib.load(str(nifti_path))
+    data = img.get_fdata()
+    if data.ndim != 4 or data.shape[3] != 2:
+        raise ValueError(f"MT3D: 4D [X,Y,Z,2] expected, {data.shape} obtained for {nifti_path}")
+
+    src_json = nifti_path.with_suffix("").with_suffix(".json")
+    existing = json.loads(src_json.read_text(encoding="utf-8")) if src_json.exists() else {}
+
+    for idx, state in enumerate(["off", "on"]):        # vol 0 = MToff, vol 1 = MTon
+        out = nib.Nifti1Image(data[..., idx], img.affine, img.header)
+        out_base = f"{base_prefix}_mt-{state}_MTS"
+        nib.save(out, f"{out_base}.nii.gz")
+        sidecar = dict(existing)
+        sidecar["MagnetizationTransfer"] = (state == "on")
+        sidecar.setdefault("FlipAngle", fa_value)
+        with open(f"{out_base}.json", "w") as f:
+            json.dump(sidecar, f, indent=2)
+        logger.info("MT3D → %s (MT=%s)", os.path.basename(out_base), state == "on")
+
+    nifti_path.unlink(missing_ok=True)
+    if src_json.exists():
+        src_json.unlink()
+
+# ── MP2RAGE : extraction params + split 4D ──────────────
 
 
 def extract_mp2rage_params(method: dict) -> dict:
@@ -302,23 +334,23 @@ def custom_callable(prefix, outtypes, item_dicoms):
     logger.debug("custom_callable: prefix=%s", prefix)
     suffix = prefix.split("_")[-1]
 
-    if suffix == "MEGRE":
-        relabel_complex_megre(prefix)
-        return
-    if not item_dicoms:
-        logger.warning("custom_callable: aucun DICOM pour %s ; skip.", prefix)
-        return
     dcm = item_dicoms[0]
 
     try:
-        if suffix == "dwi":
+        if suffix == "MTw":
+            base = prefix[: -len("_MTw")]
+            split_mt3d_to_mts(Path(f"{prefix}.nii.gz"), base)
+            return
+        elif suffix == "MEGRE":
+            relabel_complex_megre(prefix)
+            return
+        elif suffix == "dwi":
             bvec, bval = get_bvec_bval(dcm)
             if bvec is not None:
                 write_bvec_bval(bvec, bval, prefix)
             method = read_method(dcm)
             if method:
                 write_bmat(method, prefix)
-
         elif suffix == "MP2RAGE":
             nii = Path(f"{prefix}.nii.gz")
             if not nii.exists():
@@ -340,6 +372,9 @@ def custom_callable(prefix, outtypes, item_dicoms):
 
             nii.unlink(missing_ok=True)
             dcm2niix_json.unlink(missing_ok=True)
+        elif not item_dicoms:
+            logger.warning("custom_callable: aucun DICOM pour %s ; skip.", prefix)
+            return
 
     except Exception:
         logger.exception(

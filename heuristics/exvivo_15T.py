@@ -1,6 +1,5 @@
 import fnmatch
-
-# from custom.bruker import custom_callable
+from custom.exvivo_extras import custom_callable   # fmt: skip
 
 
 def create_key(template, outtype=("nii.gz",), annotation_classes=None):
@@ -56,10 +55,10 @@ def infotodict(seqinfo):
 
     # ── Structural ───────────────────────────────────────────────────────────
     mtw = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-6p5uT5p5kHz_MTw"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_flip-1_MTw"
     )
     mtw_denoised = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-6p5uT5p5kHz_rec-denoised_MTw"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_rec-denoised_flip-1_MTw"
     )
     t1w_flash = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-flash_T1w"
