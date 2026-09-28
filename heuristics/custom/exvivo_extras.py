@@ -108,7 +108,7 @@ def read_method(dcm_path) -> dict | None:
     return parse_method(text.splitlines())
 
 
-# ── DWI : .bmat (bvec/bval sont gérés par custom.bruker) ─────────────────────
+# ── DWI : .bmat (bvec and bval are managed by custom.bruker) ─────────────────────
 
 
 def write_bmat(method: dict, out_basename: str):

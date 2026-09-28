@@ -29,10 +29,10 @@ def infotodict(seqinfo):
 
     # ── DWI ──────────────────────────────────────────────────────────────────
     dwi_pgsebruker = create_key(
-        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-pgsebruker_dwi"
+        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_dwi"
     )
     dwi_multidwienc = create_key(
-        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-multidwienc_dwi"
+        "sub-{subject}/{session}/dwi/sub-{subject}_{session}_acq-dtiEpiFreeShapes_dwi"
     )
 
     # ── MEGRE QSM (9 echoes) ─────────────────────────────────────────────────
