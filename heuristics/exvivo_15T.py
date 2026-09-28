@@ -68,10 +68,10 @@ def infotodict(seqinfo):
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-flash_rec-denoised_T1w"
     )
     t1w_refmt = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-refMT_T1w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_flip-2_mt-off_MTS"
     )
     t1w_refmt_denoised = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-refMT_rec-denoised_T1w"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_rec-denoised_flip-2_mt-off_MTS"
     )
     t2w = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_acq-rare_T2w"
