@@ -48,7 +48,7 @@ def infotodict(seqinfo):
 
     # ── MP2RAGE ──────────────────────────────────────────────────────────────
     mp2rage_uni = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_rec-bruker_UNI"
+        "sub-{subject}/{session}/anat/sub-{subject}_{session}_rec-bruker_UNIT1"
     )
     mp2rage_4d = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_MP2RAGE"
