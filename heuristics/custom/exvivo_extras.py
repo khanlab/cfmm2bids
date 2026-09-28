@@ -152,13 +152,14 @@ def split_mt3d_to_mts(nifti_path, base_prefix, fa_value=9):
         sidecar = dict(existing)
         sidecar["MagnetizationTransfer"] = state == "on"
         sidecar.setdefault("FlipAngle", fa_value)
+        if "RepetitionTime" in sidecar:
+            sidecar["RepetitionTimeExcitation"] = sidecar.pop("RepetitionTime")
         with open(f"{out_base}.json", "w") as f:
             json.dump(sidecar, f, indent=2)
         logger.info("MT3D → %s (MT=%s)", os.path.basename(out_base), state == "on")
 
     nifti_path.unlink(missing_ok=True)
-    if src_json.exists():
-        src_json.unlink()
+    src_json.unlink(missing_ok=True)
 
 
 # ── MP2RAGE : extraction params + split 4D ──────────────
@@ -339,23 +340,29 @@ def custom_callable(prefix, outtypes, item_dicoms):
     logger.debug("custom_callable: prefix=%s", prefix)
     suffix = prefix.split("_")[-1]
 
-    dcm = item_dicoms[0]
-
     try:
+        if suffix == "MEGRE":
+            relabel_complex_megre(prefix)
+            return
+
         if suffix == "MTw":
             base = prefix[: -len("_MTw")]
             split_mt3d_to_mts(Path(f"{prefix}.nii.gz"), base)
             return
-        elif suffix == "MEGRE":
-            relabel_complex_megre(prefix)
+
+        if not item_dicoms:
+            logger.warning("custom_callable: No DICOM for %s ; skip.", prefix)
             return
-        elif suffix == "dwi":
+        dcm = item_dicoms[0]
+
+        if suffix == "dwi":
             bvec, bval = get_bvec_bval(dcm)
             if bvec is not None:
                 write_bvec_bval(bvec, bval, prefix)
             method = read_method(dcm)
             if method:
                 write_bmat(method, prefix)
+
         elif suffix == "MP2RAGE":
             nii = Path(f"{prefix}.nii.gz")
             if not nii.exists():
@@ -377,9 +384,6 @@ def custom_callable(prefix, outtypes, item_dicoms):
 
             nii.unlink(missing_ok=True)
             dcm2niix_json.unlink(missing_ok=True)
-        elif not item_dicoms:
-            logger.warning("custom_callable: No DICOM for %s ; skip.", prefix)
-            return
 
     except Exception:
         logger.exception(
