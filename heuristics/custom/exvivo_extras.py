@@ -126,8 +126,8 @@ def write_bmat(method: dict, out_basename: str):
     logger.info(".bmat written : %s.bmat (%d volumes)", out_basename, bmat.shape[1])
 
 
-
 # ── Magnetization Transfert: split 4D + rename   ──────────────
+
 
 def split_mt3d_to_mts(nifti_path, base_prefix, fa_value=9):
     """Split the MT3D 4D [X,Y,Z,2] into two MTS files: vol. 0 = MToff, vol. 1 = MTon.
@@ -136,17 +136,21 @@ def split_mt3d_to_mts(nifti_path, base_prefix, fa_value=9):
     img = nib.load(str(nifti_path))
     data = img.get_fdata()
     if data.ndim != 4 or data.shape[3] != 2:
-        raise ValueError(f"MT3D: 4D [X,Y,Z,2] expected, {data.shape} obtained for {nifti_path}")
+        raise ValueError(
+            f"MT3D: 4D [X,Y,Z,2] expected, {data.shape} obtained for {nifti_path}"
+        )
 
     src_json = nifti_path.with_suffix("").with_suffix(".json")
-    existing = json.loads(src_json.read_text(encoding="utf-8")) if src_json.exists() else {}
+    existing = (
+        json.loads(src_json.read_text(encoding="utf-8")) if src_json.exists() else {}
+    )
 
-    for idx, state in enumerate(["off", "on"]):        # vol 0 = MToff, vol 1 = MTon
+    for idx, state in enumerate(["off", "on"]):  # vol 0 = MToff, vol 1 = MTon
         out = nib.Nifti1Image(data[..., idx], img.affine, img.header)
         out_base = f"{base_prefix}_mt-{state}_MTS"
         nib.save(out, f"{out_base}.nii.gz")
         sidecar = dict(existing)
-        sidecar["MagnetizationTransfer"] = (state == "on")
+        sidecar["MagnetizationTransfer"] = state == "on"
         sidecar.setdefault("FlipAngle", fa_value)
         with open(f"{out_base}.json", "w") as f:
             json.dump(sidecar, f, indent=2)
@@ -155,6 +159,7 @@ def split_mt3d_to_mts(nifti_path, base_prefix, fa_value=9):
     nifti_path.unlink(missing_ok=True)
     if src_json.exists():
         src_json.unlink()
+
 
 # ── MP2RAGE : extraction params + split 4D ──────────────
 
@@ -373,7 +378,7 @@ def custom_callable(prefix, outtypes, item_dicoms):
             nii.unlink(missing_ok=True)
             dcm2niix_json.unlink(missing_ok=True)
         elif not item_dicoms:
-            logger.warning("custom_callable: aucun DICOM pour %s ; skip.", prefix)
+            logger.warning("custom_callable: No DICOM for %s ; skip.", prefix)
             return
 
     except Exception:

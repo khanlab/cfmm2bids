@@ -1,5 +1,6 @@
 import fnmatch
-from custom.exvivo_extras import custom_callable   # fmt: skip
+
+from custom.exvivo_extras import custom_callable  # noqa
 
 
 def create_key(template, outtype=("nii.gz",), annotation_classes=None):
@@ -54,9 +55,7 @@ def infotodict(seqinfo):
     )
 
     # ── Structural ───────────────────────────────────────────────────────────
-    mtw = create_key(
-        "sub-{subject}/{session}/anat/sub-{subject}_{session}_flip-1_MTw"
-    )
+    mtw = create_key("sub-{subject}/{session}/anat/sub-{subject}_{session}_flip-1_MTw")
     mtw_denoised = create_key(
         "sub-{subject}/{session}/anat/sub-{subject}_{session}_rec-denoised_flip-1_MTw"
     )
