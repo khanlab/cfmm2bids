@@ -64,15 +64,14 @@ download_cache: ./download_cache
 
 # ── Fixes post-conversion ─────────────────────────────────────────────────────
 post_convert_fixes:
-  - name: remove_dwi_bval_bvec
-    pattern: "dwi/*.bval"
-    action: remove
-  - name: remove_dwi_bvec
-    pattern: "dwi/*.bvec"
-    action: remove
-  - name: add_bidsignore
-    pattern: "**/*MTw*"
-    action: remove
+  - name: mts_ref_reptime_excitation
+    action: rename_json_keys
+    pattern: "*flip-2_mt-off_MTS.json"
+    rename:
+      RepetitionTime: RepetitionTimeExcitation
+  - name: rebuild_scans_tsv
+    action: regenerate_scans_tsv
+    pattern: "*_scans.tsv"
 
 default-resources:
   slurm_extra: "'--export=UWO_USERNAME,UWO_PASSWORD'"
