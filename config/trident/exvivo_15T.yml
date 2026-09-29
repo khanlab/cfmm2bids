@@ -51,6 +51,11 @@ study_filter_specs:
   include: []
   exclude: []
 
+# ── Bids ignore ───────────────────────────────────────────────────────────────
+bidsignore:
+  - '*_MEGRE.*'
+  - '*.bmat'
+
 # ── Download ──────────────────────────────────────────────────────────────────
 credentials_file: ~/.uwo_credentials
 cfmm2tar_download_options: "--skip-derived"
