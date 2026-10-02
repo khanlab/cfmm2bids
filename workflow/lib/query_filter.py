@@ -173,9 +173,7 @@ def expand_search_specs(search_specs):
             )
 
         base_dicom_query = spec.get("dicom_query", {})
-        select_from_field = spec.get(
-            "select_from_field", DEFAULT_SELECT_FROM_FIELD
-        )
+        select_from_field = spec.get("select_from_field", DEFAULT_SELECT_FROM_FIELD)
 
         shared_keys = {"select", "select_from_field", "dicom_query"}
         for sel in select:
