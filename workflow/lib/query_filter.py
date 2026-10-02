@@ -108,7 +108,7 @@ def validate_column(df, col):
     return valid
 
 
-DEFAULT_SELECT_FROM_FIELD = "patient_id"
+DEFAULT_SELECT_FROM_FIELD = "patient_name"
 
 
 def expand_search_specs(search_specs):
