@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import stat
 from pathlib import Path
 
 import nibabel as nib
@@ -26,6 +27,14 @@ logger = logging.getLogger(__name__)
 
 BRUKER_METHOD_TAG = (0x0177, 0x1100)
 GAMMA_H = 42.577478518  # (MHz/T)
+
+
+def _ensure_writable(path: Path):
+    """heudiconv writes its outputs read-only; restore owner-write before editing in place."""
+    try:
+        os.chmod(path, os.stat(path).st_mode | stat.S_IWUSR)
+    except OSError:
+        logger.warning("Could not chmod +w %s", path)
 
 
 # ── Parser JCAMP-DX ─────────────────────────────
@@ -333,6 +342,42 @@ def relabel_complex_megre(prefix):
         )
 
 
+def write_megre_echo_times(method, prefix):
+    """Store Bruker echo times in the MEGRE sidecar as a CUSTOM (non-BIDS) field.
+
+    Echoes/channels stay stacked inside the NIfTI (complex data kept for the
+    downstream QSM reconstruction), so these files are NOT valid BIDS MEGRE
+    (the collection requires one file per `echo-`). They must go to .bidsignore.
+    The custom fields below document the echo structure for the QSM pipeline.
+
+    method : parsed Bruker method dict (from read_method)
+    prefix : output prefix WITHOUT extension (e.g. ..._acq-qsm_run-01_part-real)
+    """
+    if method is None:
+        logger.warning("MEGRE TE: no method for %s ; skip.", prefix)
+        return
+
+    tes_ms = get_floats(method, "EffectiveTE")
+    if not tes_ms:
+        logger.warning("MEGRE TE: EffectiveTE missing for %s ; skip.", prefix)
+        return
+
+    js = Path(f"{prefix}.json")
+    if not js.exists():
+        logger.warning("MEGRE TE: sidecar missing for %s", js)
+        return
+
+    sc = json.loads(js.read_text(encoding="utf-8"))
+    sc["EchoTimes"] = [round(t / 1e3, 6) for t in tes_ms]  # ms → s, custom (plural)
+    sc["NumberOfEchoes"] = int(get_float(method, "PVM_NEchoImages") or len(tes_ms))
+
+    _ensure_writable(js)
+    js.write_text(json.dumps(sc, indent=2), encoding="utf-8")
+    logger.info(
+        "MEGRE TE written (%d echoes) : %s", len(tes_ms), os.path.basename(prefix)
+    )
+
+
 # ── Hook heudiconv ───────────────────────────────────────────────────────────
 
 
@@ -341,10 +386,6 @@ def custom_callable(prefix, outtypes, item_dicoms):
     suffix = prefix.split("_")[-1]
 
     try:
-        if suffix == "MEGRE":
-            relabel_complex_megre(prefix)
-            return
-
         if suffix == "MTw":
             base = prefix[: -len("_MTw")]
             split_mt3d_to_mts(Path(f"{prefix}.nii.gz"), base)
@@ -355,7 +396,21 @@ def custom_callable(prefix, outtypes, item_dicoms):
             return
         dcm = item_dicoms[0]
 
-        if suffix == "dwi":
+        if suffix == "MEGRE":
+            method = read_method(dcm)
+            relabel_complex_megre(
+                prefix
+            )  # renames {prefix}N → ..._part-real/imag_MEGRE
+            # write TE on the FINAL names produced by the relabel
+            stem = prefix[: -len("_MEGRE")]
+            for part_prefix in sorted(glob.glob(f"{stem}_part-*_MEGRE.json")):
+                write_megre_echo_times(method, part_prefix[: -len(".json")])
+            # also cover the magnitude (not touched by relabel): {prefix} itself
+            if Path(f"{prefix}.json").exists():
+                write_megre_echo_times(method, prefix)
+            return
+
+        elif suffix == "dwi":
             bvec, bval = get_bvec_bval(dcm)
             if bvec is not None:
                 write_bvec_bval(bvec, bval, prefix)
