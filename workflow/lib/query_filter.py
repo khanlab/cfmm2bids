@@ -108,19 +108,19 @@ def validate_column(df, col):
     return valid
 
 
-DEFAULT_SUBJECT_QUERY_FIELD = "patient_id"
+DEFAULT_SELECT_FROM_FIELD = "patient_id"
 
 
 def expand_search_specs(search_specs):
     """
     Expand subject-list search specs into explicit per-subject DICOM queries.
 
-    A search spec may optionally include a top-level ``subjects`` key
-    containing a list of subject identifiers to include. When present, the
+    A search spec may optionally include a top-level ``select`` key
+    containing a list of identifiers to include. When present, the
     spec's ``dicom_query`` is treated as a set of *shared* query filters
     (e.g. study description, date range) and is expanded into one spec per
-    subject, with the subject identifier merged into ``dicom_query`` under
-    the key given by ``subject_query_field`` (default: ``"patient_id"``).
+    selection, with selection identifier merged into ``dicom_query`` under
+    the key given by ``select_from_field`` (default: ``"patient_name"``).
 
     This is useful when you have a known list of subjects to include and
     want to exclude everything else, without having to hand-write one
@@ -129,7 +129,7 @@ def expand_search_specs(search_specs):
     must be queried individually; ``query_dicoms`` runs each of the
     resulting per-subject queries and concatenates the results.
 
-    Specs that do not contain a ``subjects`` key are passed through
+    Specs that do not contain a ``select`` key are passed through
     unchanged, so existing configs continue to work exactly as before.
 
     Parameters
@@ -141,48 +141,48 @@ def expand_search_specs(search_specs):
     -------
     list of dict
         The expanded list of search specifications. Each returned spec has
-        a fully resolved ``dicom_query`` and no ``subjects`` /
-        ``subject_query_field`` keys.
+        a fully resolved ``dicom_query`` and no ``select`` /
+        ``select_from_field`` keys.
 
     Raises
     ------
     ValueError
-        If a spec's ``subjects`` key is present but is not a non-empty list
-        of non-empty subject identifier strings.
+        If a spec's ``select`` key is present but is not a non-empty list
+        of non-empty identifier strings.
     """
     expanded = []
 
     for i, spec in enumerate(search_specs):
-        if "subjects" not in spec:
+        if "select" not in spec:
             expanded.append(spec)
             continue
 
-        subjects = spec["subjects"]
+        select = spec["select"]
 
-        if not isinstance(subjects, list) or len(subjects) == 0:
+        if not isinstance(select, list) or len(select) == 0:
             raise ValueError(
-                f"search_specs[{i}]: 'subjects' must be a non-empty list of "
-                f"subject identifiers, got {subjects!r}."
+                f"search_specs[{i}]: 'select' must be a non-empty list of "
+                f"identifiers, got {select!r}."
             )
 
-        invalid = [s for s in subjects if not isinstance(s, str) or not s.strip()]
+        invalid = [s for s in select if not isinstance(s, str) or not s.strip()]
         if invalid:
             raise ValueError(
-                f"search_specs[{i}]: 'subjects' must contain only non-empty "
+                f"search_specs[{i}]: 'select' must contain only non-empty "
                 f"strings; found invalid entries: {invalid!r}."
             )
 
         base_dicom_query = spec.get("dicom_query", {})
-        subject_query_field = spec.get(
-            "subject_query_field", DEFAULT_SUBJECT_QUERY_FIELD
+        select_from_field = spec.get(
+            "select_from_field", DEFAULT_SELECT_FROM_FIELD
         )
 
-        shared_keys = {"subjects", "subject_query_field", "dicom_query"}
-        for subject in subjects:
+        shared_keys = {"select", "select_from_field", "dicom_query"}
+        for sel in select:
             new_spec = {k: v for k, v in spec.items() if k not in shared_keys}
             new_spec["dicom_query"] = {
                 **base_dicom_query,
-                subject_query_field: subject,
+                select_from_field: sel,
             }
             expanded.append(new_spec)
 
@@ -232,7 +232,18 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
 
                 # Optional regex extraction
                 if "pattern" in mapping:
-                    series = series.str.extract(mapping["pattern"], expand=False)
+                    if "replace" in mapping:
+                        series = series.str.replace(
+                            mapping["pattern"],
+                            mapping["replace"],
+                            regex=True,
+                        )
+                    else:
+                        # Backwards-compatible existing behaviour
+                        series = series.str.extract(
+                            mapping["pattern"],
+                            expand=False,
+                        )
 
                 # Optional cleaning / sanitization
                 if mapping.get("sanitize", True):
