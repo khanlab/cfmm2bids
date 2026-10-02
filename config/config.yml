@@ -184,6 +184,28 @@ search_specs:
   #     session:
   #       source: StudyDate
 
+  # Subject include-list spec (OPTIONAL)
+  # Instead of a dicom_query that could also match unwanted subjects,
+  # you can provide a 'subjects' list plus shared query filters. This is
+  # internally expanded into one query per subject (merging the shared
+  # dicom_query filters with each subject's identifier, by default into
+  # the 'patient_id' field) since DICOM servers can't be queried for a
+  # list of subjects in a single request. The results of all per-subject
+  # queries are concatenated, exactly as if written out explicitly.
+  # - dicom_query:
+  #     study_description: AnotherStudy^*
+  #     study_date: 20230101-
+  #   subjects:
+  #     - SUBJ001
+  #     - SUBJ002
+  #     - SUBJ003
+  #   # subject_query_field: patient_id  # OPTIONAL, default: patient_id
+  #   metadata_mappings:
+  #     subject:
+  #       source: PatientID
+  #     session:
+  #       source: StudyDate
+
 
 
 # additional options to pass to cfmm query_metadata, e.g. to include additional

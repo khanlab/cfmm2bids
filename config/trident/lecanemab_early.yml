@@ -6,7 +6,16 @@ final_bids_dir: "/nfs/trident3/mri/prado/lecanemab_early/bids"
 search_specs:
   - dicom_query:
       study_description:  "Prado^Leq_AB_agg"
-      study_date: 20250601-20260101
+    select:
+      - AppKI2.hTau.APOE*4_64-5F2
+      - AppKI2.hTau.APOE*4_71-2M1
+      - AppKI2.hTau.APOE*4_71-2M2
+      - AppKI2.hTau.APOE*4_71-2M3
+      - AppKI2.hTau.APOE*4_71-2F4
+      - AppKI2.hTau.APOE*4_71-2F5
+      - AppKI2.hTau.APOE*4_71-2F6
+      - AppKI2.hTau.APOE*4_71-2F7
+
     metadata_mappings:
       subject:
         source: PatientName
@@ -14,23 +23,42 @@ search_specs:
         sanitize: false
         # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
         map:
-          '64-5F2': AS303F2
-          '71-2M1': AS305M1
-          '71-2M2': AS305M2
-          '71-2M3': AS305M3
-          '71-2F4': AS306F4
-          '71-2F5': AS306F5  #was the e2 suffix necessary?
-          '71-2F6': AS306F6 
-          '71-2F7': AS306F7
-
+          '64-5F2':  AS303F2
+          '71-2M1':  AS305M1
+          '71-2M2':  AS305M2
+          '71-2M3':  AS305M3
+          '71-2F4':  AS306F4
+          '71-2F5':  AS306F5
+          '71-2F6':  AS306F6
+          '71-2F7':  AS306F7
       session:
         source: StudyDate
-        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
 
 
   - dicom_query:
       study_description:  "Prado^Leq_AB_agg"
-      study_date: 20260101-
+    select:
+      - AS454M3
+      - AS454M4
+      - AS454M7
+      - AS438F7
+      - AS438F8
+      - AS438F9
+      - AS438F10
+      - As436M1
+      - AS436M2
+      - AS436M3
+      - AS436M4
+      - AS453F1
+      - AS453F2
+      - AS453F2e
+      - AS453F3
+      - AS452M1
+      - AS452M2
+      - AS452M3
+      - AS452M4
+      - AS458F5
+      - AS458F6
     metadata_mappings:
       subject:
         source: PatientName
@@ -39,39 +67,39 @@ search_specs:
         # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
         map:
           'As436M1': AS436M1
-
       session:
         source: StudyDate
 
   - dicom_query:
       study_description:  "Menon^AS-MBN"
-      patient_name: "*_AS16*"
-      study_date: 20240712-20240921
-    metadata_mappings:
-      subject:
-        source: PatientName
-        pattern: '_(AS[0-9]+[MF][0-9])$'
-        sanitize: true
-        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
-   
-      session:
-        source: StudyDate
-        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
+    select:
+      - AppKI2.hTau.APOE*4_35-7M#5_AS160M5
+      - AppKI2.hTau.APOE*4_36-1M#1_AS160M1
+      - AppKI2.hTau.APOE*4_36-1M#2_AS160M2
+      - AppKI2.hTau.APOE*4_36-1M#3_AS160M3
+      - AppKI2.hTau.APOE*4_36-1M#4_AS161M4
+      - AppKI2.hTau.APOE*4_36-1M#5_AS161M5
+      - AppKI2.hTau.APOE*4_39-1F#1_AS167F1
+      - AppKI2.hTau.APOE*4_39-1F#5_AS167F5
+      - AppKI2.hTau.APOE*4_39-1F#6_AS167F6
+      - AppKI2.hTau.APOE*4_43-6M#4_AS209M4
+      - AppKI2.hTau.APOE*4_43-6M#5_AS209M5
+      - AppKI2.hTau.APOE*4_43-6M#6_AS209M5e
+      - AppKI2.hTau.APOE*4_43-6M#7_AS209M7
+      - AppKI2.hTau.APOE*4_46-3F#1_AS210F1
+      - AppKI2.hTau.APOE*4_46-3F#3_AS210F3
+      - AppKI2.hTau.APOE*4_46-3F#4_AS210F4
+      - AppKI2.hTau.APOE*4_46-3F#6_AS210F6
 
-  - dicom_query:
-      study_description:  "Menon^AS-MBN"
-      patient_name: "*_AS2*"
-      study_date: 20241108-20250305
     metadata_mappings:
       subject:
         source: PatientName
-        pattern: '_(AS[0-9]+[MF][0-9])$'
+        pattern: '_(AS[0-9]+[MF][a-z0-9]+)$'
         sanitize: true
-        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
-   
+        remap:
+          AS209M5e: AS209M6
       session:
         source: StudyDate
-        # constant: '15T'  # Use constant value for all sessions (OPTIONAL)
 
 
 query_kwargs:

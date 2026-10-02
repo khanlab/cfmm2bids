@@ -8,6 +8,7 @@ import pytest
 
 from workflow.lib.query_filter import (
     QUERY_CACHE_MAX_AGE_SECONDS,
+    expand_search_specs,
     post_filter,
     query_dicoms,
     remap_sessions_by_date,
@@ -875,3 +876,163 @@ class TestPostFilterRemapValues:
         df = self._make_df(["sub01"], ["0m"])
         result = post_filter(df, {"include": [], "exclude": []})
         assert list(result["session"]) == ["0m"]
+
+
+class TestExpandSearchSpecs:
+    """Tests for expand_search_specs subject-list expansion."""
+
+    def test_legacy_spec_passed_through_unchanged(self):
+        """Specs without a 'subjects' key are returned unchanged."""
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "metadata_mappings": {"subject": {"source": "PatientID"}},
+            }
+        ]
+        result = expand_search_specs(search_specs)
+        assert result == search_specs
+
+    def test_subject_list_expands_to_one_spec_per_subject(self):
+        """A 'subjects' list expands into one dicom_query per subject."""
+        search_specs = [
+            {
+                "dicom_query": {
+                    "study_description": "Test^*",
+                    "study_date": "20230101-",
+                },
+                "subjects": ["sub01", "sub02", "sub03"],
+                "metadata_mappings": {"subject": {"source": "PatientID"}},
+            }
+        ]
+        result = expand_search_specs(search_specs)
+        assert len(result) == 3
+        for i, subject in enumerate(["sub01", "sub02", "sub03"]):
+            assert result[i]["dicom_query"] == {
+                "study_description": "Test^*",
+                "study_date": "20230101-",
+                "patient_id": subject,
+            }
+            assert "subjects" not in result[i]
+            assert "subject_query_field" not in result[i]
+            # Shared metadata mappings are preserved for each expanded spec
+            assert result[i]["metadata_mappings"] == {
+                "subject": {"source": "PatientID"}
+            }
+
+    def test_subject_query_field_override(self):
+        """subject_query_field controls which dicom_query key receives the subject."""
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "subjects": ["sub01"],
+                "subject_query_field": "patient_name",
+            }
+        ]
+        result = expand_search_specs(search_specs)
+        assert result[0]["dicom_query"] == {
+            "study_description": "Test^*",
+            "patient_name": "sub01",
+        }
+
+    def test_mixed_legacy_and_subject_list_specs(self):
+        """Legacy specs and subject-list specs can be combined in one config."""
+        search_specs = [
+            {"dicom_query": {"study_description": "Legacy^*"}},
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "subjects": ["sub01", "sub02"],
+            },
+        ]
+        result = expand_search_specs(search_specs)
+        assert len(result) == 3
+        assert result[0]["dicom_query"] == {"study_description": "Legacy^*"}
+        assert result[1]["dicom_query"] == {
+            "study_description": "Test^*",
+            "patient_id": "sub01",
+        }
+        assert result[2]["dicom_query"] == {
+            "study_description": "Test^*",
+            "patient_id": "sub02",
+        }
+
+    def test_empty_subjects_list_raises(self):
+        """An empty 'subjects' list is a validation error."""
+        search_specs = [
+            {"dicom_query": {"study_description": "Test^*"}, "subjects": []}
+        ]
+        with pytest.raises(ValueError, match="non-empty list"):
+            expand_search_specs(search_specs)
+
+    def test_subjects_not_a_list_raises(self):
+        """A non-list 'subjects' value is a validation error."""
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "subjects": "sub01",
+            }
+        ]
+        with pytest.raises(ValueError, match="non-empty list"):
+            expand_search_specs(search_specs)
+
+    def test_subjects_with_blank_entry_raises(self):
+        """Blank/whitespace-only subject identifiers are a validation error."""
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "subjects": ["sub01", "  ", ""],
+            }
+        ]
+        with pytest.raises(ValueError, match="non-empty strings"):
+            expand_search_specs(search_specs)
+
+    def test_subjects_with_non_string_entry_raises(self):
+        """Non-string subject identifiers are a validation error."""
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "subjects": ["sub01", 123],
+            }
+        ]
+        with pytest.raises(ValueError, match="non-empty strings"):
+            expand_search_specs(search_specs)
+
+    def test_query_dicoms_expands_subject_list(self, monkeypatch):
+        """query_dicoms runs one query per subject and concatenates results."""
+        import workflow.lib.query_filter as qf_module
+
+        called_kwargs = []
+
+        def mock_query_metadata(return_type=None, **kwargs):
+            called_kwargs.append(kwargs)
+            patient_id = kwargs["patient_id"]
+            return pd.DataFrame(
+                {
+                    "PatientID": [patient_id],
+                    "StudyDate": ["20230101"],
+                    "StudyInstanceUID": [f"1.2.3.{patient_id}"],
+                }
+            )
+
+        monkeypatch.setattr(qf_module, "query_metadata", mock_query_metadata)
+
+        search_specs = [
+            {
+                "dicom_query": {"study_description": "Test^*"},
+                "subjects": ["sub01", "sub02"],
+                "metadata_mappings": {
+                    "subject": {"source": "PatientID"},
+                    "session": {"source": "StudyDate"},
+                },
+            }
+        ]
+
+        result_df = query_dicoms(search_specs)
+
+        # One query issued per subject, each with the shared filter applied
+        assert len(called_kwargs) == 2
+        assert {kw["patient_id"] for kw in called_kwargs} == {"sub01", "sub02"}
+        assert all(kw["study_description"] == "Test^*" for kw in called_kwargs)
+
+        # Results from all per-subject queries are concatenated
+        assert len(result_df) == 2
+        assert set(result_df["subject"]) == {"sub01", "sub02"}

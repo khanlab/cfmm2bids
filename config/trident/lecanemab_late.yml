@@ -4,58 +4,110 @@ final_bids_dir: "/nfs/trident3/mri/prado/lecanemab_late/bids"
 
 # 1. query
 search_specs:
+
   - dicom_query:
-      study_description:  "Prado^Leq_AB_agg_old" #placeholder, need to add in correct name
-      study_date: 20260101-
+      study_description:  "Prado^Leq_AB_agg" 
+    select:
+      - AS380F1
+      - AS380F3e
+      - AS381M4
+      - AS381M5
+      - AS381M6
+      - AS391F1
+      - AS391F2
+      - AS400M1
+      - AS400M2
+      - AS395F1
+      - AS395F2
+      - AS395F3
+      - AS395F4
+      - AS401M5
+      - AS401M6
+
+    select_from_field: patient_name  # OPTIONAL, default: patient_name
     metadata_mappings:
       subject:
         source: PatientName
-        pattern: '([a-zA-Z0-9]+)$'
         sanitize: false
-        # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
-
       session:
         source: StudyDate
 
+  #these scans had different naming
+  - dicom_query:
+      study_description:  "Prado^Leq_AB_agg" 
+    select:
+      - 375-92-1-M1
+      - 375-92-1-M2
+      - 375-92-1-M3
+      - 378-92-1-F7
+      - 378-92-1-F8
+      - 376-80-5-F1
+      - 376-80-5-F2
+    select_from_field: patient_name  # OPTIONAL, default: patient_name
+    metadata_mappings:
+      subject:
+        source: PatientName
+        pattern: '([0-9]+)-[0-9]+-[0-9]+-([MF][0-9])+$'
+        replace: 'AS\1\2'
+        sanitize: false
+      session:
+        source: StudyDate
+
+
+  #these ones only have one 15m timepoint, so we fix that as constant
+  - dicom_query:
+      study_description:  "Prado^Leq_AB_agg" 
+    select:
+      - AS379M1
+      - AS379M2
+      - AS412M1
+      - AS416M2
+      - AS416M1
+      - AS426M1
+      - AS426M3
+      - AS426M4
+      - AS426M5      
+    select_from_field: patient_name  # OPTIONAL, default: patient_name
+    metadata_mappings:
+      subject:
+        source: PatientName
+        sanitize: false
+
+      session:
+        constant: "15m"
+
+  # these are the earlier scans by Amr
   - dicom_query:
       study_description:  "Menon^AS-MBN"
       patient_name: "*_AS*"
       study_date: 20240715-20241030
-    metadata_mappings:
-      subject:
-        source: PatientName
-        pattern: '_(AS[0-9a-zA-Z]+[MF][0-9])$'
-        sanitize: true
- 
-        map:
-          'AS160M1': null
-          'AS160M2': null
-          'AS160M3': null
-          'AS160M5': null
-          'AS161M4': null
-          'AS161M5': null
-          'AS167F1': null
-          'AS167F5': null
-          'AS167F6': null
-      session:
-        source: StudyDate
-
-  - dicom_query:
-      study_description:  "Menon^AS-MBN"
-      patient_name: "*_AS36F*"
-      study_date: 20241102-20250225
-    metadata_mappings:
-      subject:
-        source: PatientName
-        pattern: '_(AS[0-9a-zA-Z]+[MF][0-9][a-z]?)$'
-        sanitize: true
-      session:
-        source: StudyDate
-
-  - dicom_query:
-      study_description:  "Menon^AS-MBN"
-      patient_name: "*_AS40F*"
-      study_date: 20241101-20250226
+    select:
+      - AppKI2.hTau.APOE*4_32-2M#2_AS120M2
+      - AppKI2.hTau.APOE*4_32-2M#3_AS120M3
+      - AppKI2.hTau.APOE*4_32-2M#4_AS120M4
+      - AppKI2.hTau.APOE*4_30-4M#6_AS125bM6
+      - AppKI2.hTau.APOE*4_30-4M#7_AS125bM7
+      - AppKI2.hTau.APOE*4_30-4M#8_AS125bM8
+      - AppKI2.hTau.APOE*4_30-4M#9_AS125bM9
+      - AppKI2.hTau.APOE*4_30-5M#1_AS126bM1
+      - AppKI2.hTau.APOE*4_30-5M#2_AS126bM2
+      - AppKI2.hTau.APOE*4_30-5M#3_AS126bM3
+      - AppKI2.hTau.APOE*4_30-5M#4_AS126bM4
+      - AppKI2.hTau.APOE*4_30-6M#3_AS127M3
+      - AppKI2.hTau.APOE*4_30-6M#4_AS127M4
+      - AppKI2.hTau.APOE*4_30-6M#5_AS128M5
+      - AppKI2.hTau.APOE*4_30-6M#6_AS128M6
+      - AppKI2.hTau.APOE*4_34-1M#1_AS128M1
+      - AppKI2.hTau.APOE*4_34-2M#4_AS131M4
+      - AppKI2.hTau.APOE*4_34-2M#5_AS131M5
+      - AppKI2.hTau.APOE*4_34-2M#6_AS131M6
+      - AppKI2.hTau.APOE*4_27-1M#5_AS90M5
+      - AppKI2.hTau.APOE*4_21-3M#5_AS98M5
+      - AppKI2.hTau.APOE*4_25-2M#1_AS96M1
+      - AppKI2.hTau.APOE*4_26-1M#5_AS89M5
+      - AppKI2.hTau.APOE*4_24-3F#7_AS105M7
+      - AppKI2.hTau.APOE*4_24-3F#8_AS105M8
+      - AppKI2.hTau.APOE*4_27-3M#5_AS8103M5
     metadata_mappings:
       subject:
         source: PatientName
@@ -63,7 +115,6 @@ search_specs:
         sanitize: true
       session:
         source: StudyDate
-
  
 query_kwargs:
   additional_tags:

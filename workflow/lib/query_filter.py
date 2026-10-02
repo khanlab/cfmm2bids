@@ -108,12 +108,93 @@ def validate_column(df, col):
     return valid
 
 
+DEFAULT_SELECT_FROM_FIELD = "patient_name"
+
+
+def expand_search_specs(search_specs):
+    """
+    Expand subject-list search specs into explicit per-subject DICOM queries.
+
+    A search spec may optionally include a top-level ``select`` key
+    containing a list of identifiers to include. When present, the
+    spec's ``dicom_query`` is treated as a set of *shared* query filters
+    (e.g. study description, date range) and is expanded into one spec per
+    selection, with selection identifier merged into ``dicom_query`` under
+    the key given by ``select_from_field`` (default: ``"patient_name"``).
+
+    This is useful when you have a known list of subjects to include and
+    want to exclude everything else, without having to hand-write one
+    nearly-identical query block per subject. DICOM servers cannot be
+    queried for a list of subjects in a single request, so each subject
+    must be queried individually; ``query_dicoms`` runs each of the
+    resulting per-subject queries and concatenates the results.
+
+    Specs that do not contain a ``select`` key are passed through
+    unchanged, so existing configs continue to work exactly as before.
+
+    Parameters
+    ----------
+    search_specs : list of dict
+        The raw search specifications from the config.
+
+    Returns
+    -------
+    list of dict
+        The expanded list of search specifications. Each returned spec has
+        a fully resolved ``dicom_query`` and no ``select`` /
+        ``select_from_field`` keys.
+
+    Raises
+    ------
+    ValueError
+        If a spec's ``select`` key is present but is not a non-empty list
+        of non-empty identifier strings.
+    """
+    expanded = []
+
+    for i, spec in enumerate(search_specs):
+        if "select" not in spec:
+            expanded.append(spec)
+            continue
+
+        select = spec["select"]
+
+        if not isinstance(select, list) or len(select) == 0:
+            raise ValueError(
+                f"search_specs[{i}]: 'select' must be a non-empty list of "
+                f"identifiers, got {select!r}."
+            )
+
+        invalid = [s for s in select if not isinstance(s, str) or not s.strip()]
+        if invalid:
+            raise ValueError(
+                f"search_specs[{i}]: 'select' must contain only non-empty "
+                f"strings; found invalid entries: {invalid!r}."
+            )
+
+        base_dicom_query = spec.get("dicom_query", {})
+        select_from_field = spec.get("select_from_field", DEFAULT_SELECT_FROM_FIELD)
+
+        shared_keys = {"select", "select_from_field", "dicom_query"}
+        for sel in select:
+            new_spec = {k: v for k, v in spec.items() if k not in shared_keys}
+            new_spec["dicom_query"] = {
+                **base_dicom_query,
+                select_from_field: sel,
+            }
+            expanded.append(new_spec)
+
+    return expanded
+
+
 def query_dicoms(search_specs, **query_metadata_kwargs):
     if query_metadata is None:
         raise ImportError(
             "cfmm2tar is required for querying DICOM metadata. "
             "Install it with: pip install cfmm2tar"
         )
+
+    search_specs = expand_search_specs(search_specs)
 
     all_dfs = []
 
@@ -149,7 +230,18 @@ def query_dicoms(search_specs, **query_metadata_kwargs):
 
                 # Optional regex extraction
                 if "pattern" in mapping:
-                    series = series.str.extract(mapping["pattern"], expand=False)
+                    if "replace" in mapping:
+                        series = series.str.replace(
+                            mapping["pattern"],
+                            mapping["replace"],
+                            regex=True,
+                        )
+                    else:
+                        # Backwards-compatible existing behaviour
+                        series = series.str.extract(
+                            mapping["pattern"],
+                            expand=False,
+                        )
 
                 # Optional cleaning / sanitization
                 if mapping.get("sanitize", True):
