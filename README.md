@@ -265,6 +265,40 @@ metadata_mappings:
 
 This is useful when you need to add a prefix, suffix, or otherwise reformat the extracted value. For example, `format: "AA{value}"` would turn `"001"` into `"AA001"`.
 
+#### Subject Include-List Queries
+
+If you want to include only a known list of subjects (and exclude everything else), you can specify a `subjects` list alongside shared `dicom_query` filters, instead of a `patient_id`/`patient_name` pattern that could also match unwanted subjects:
+
+```yaml
+search_specs:
+  - dicom_query:
+      study_description: YourStudy^*
+      study_date: 20230101-
+    subjects:
+      - SUBJ001
+      - SUBJ002
+      - SUBJ003
+    metadata_mappings:
+      subject:
+        source: PatientID
+      session:
+        source: StudyDate
+```
+
+Since DICOM servers cannot be queried for a list of subjects in a single request, this is internally expanded into one query per subject, merging the shared `dicom_query` filters with that subject's identifier (e.g. the example above is equivalent to writing three separate `dicom_query` blocks, one per subject, each with `patient_id: SUBJ00N` added). The results of all per-subject queries are concatenated into a single list of studies, exactly as if they had been written out explicitly.
+
+By default the subject identifier is merged into the `patient_id` field of `dicom_query`. Use `subject_query_field` to merge it into a different field instead, e.g. `patient_name`:
+
+```yaml
+search_specs:
+  - dicom_query:
+      study_description: YourStudy^*
+    subjects: [SUBJ001, SUBJ002]
+    subject_query_field: patient_name
+```
+
+`subjects` must be a non-empty list of non-empty subject identifier strings; otherwise the workflow will raise a validation error describing the problem. Search specs without a `subjects` key continue to work exactly as before (backward compatible), and `subjects`-based specs can be freely mixed with regular `dicom_query`-only specs in the same `search_specs` list.
+
 ### Filter Configuration (`study_filter_specs`)
 Post-filter studies with include/exclude rules:
 ```yaml

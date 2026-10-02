@@ -108,12 +108,95 @@ def validate_column(df, col):
     return valid
 
 
+DEFAULT_SUBJECT_QUERY_FIELD = "patient_id"
+
+
+def expand_search_specs(search_specs):
+    """
+    Expand subject-list search specs into explicit per-subject DICOM queries.
+
+    A search spec may optionally include a top-level ``subjects`` key
+    containing a list of subject identifiers to include. When present, the
+    spec's ``dicom_query`` is treated as a set of *shared* query filters
+    (e.g. study description, date range) and is expanded into one spec per
+    subject, with the subject identifier merged into ``dicom_query`` under
+    the key given by ``subject_query_field`` (default: ``"patient_id"``).
+
+    This is useful when you have a known list of subjects to include and
+    want to exclude everything else, without having to hand-write one
+    nearly-identical query block per subject. DICOM servers cannot be
+    queried for a list of subjects in a single request, so each subject
+    must be queried individually; ``query_dicoms`` runs each of the
+    resulting per-subject queries and concatenates the results.
+
+    Specs that do not contain a ``subjects`` key are passed through
+    unchanged, so existing configs continue to work exactly as before.
+
+    Parameters
+    ----------
+    search_specs : list of dict
+        The raw search specifications from the config.
+
+    Returns
+    -------
+    list of dict
+        The expanded list of search specifications. Each returned spec has
+        a fully resolved ``dicom_query`` and no ``subjects`` /
+        ``subject_query_field`` keys.
+
+    Raises
+    ------
+    ValueError
+        If a spec's ``subjects`` key is present but is not a non-empty list
+        of non-empty subject identifier strings.
+    """
+    expanded = []
+
+    for i, spec in enumerate(search_specs):
+        if "subjects" not in spec:
+            expanded.append(spec)
+            continue
+
+        subjects = spec["subjects"]
+
+        if not isinstance(subjects, list) or len(subjects) == 0:
+            raise ValueError(
+                f"search_specs[{i}]: 'subjects' must be a non-empty list of "
+                f"subject identifiers, got {subjects!r}."
+            )
+
+        invalid = [s for s in subjects if not isinstance(s, str) or not s.strip()]
+        if invalid:
+            raise ValueError(
+                f"search_specs[{i}]: 'subjects' must contain only non-empty "
+                f"strings; found invalid entries: {invalid!r}."
+            )
+
+        base_dicom_query = spec.get("dicom_query", {})
+        subject_query_field = spec.get(
+            "subject_query_field", DEFAULT_SUBJECT_QUERY_FIELD
+        )
+
+        shared_keys = {"subjects", "subject_query_field", "dicom_query"}
+        for subject in subjects:
+            new_spec = {k: v for k, v in spec.items() if k not in shared_keys}
+            new_spec["dicom_query"] = {
+                **base_dicom_query,
+                subject_query_field: subject,
+            }
+            expanded.append(new_spec)
+
+    return expanded
+
+
 def query_dicoms(search_specs, **query_metadata_kwargs):
     if query_metadata is None:
         raise ImportError(
             "cfmm2tar is required for querying DICOM metadata. "
             "Install it with: pip install cfmm2tar"
         )
+
+    search_specs = expand_search_specs(search_specs)
 
     all_dfs = []
 
