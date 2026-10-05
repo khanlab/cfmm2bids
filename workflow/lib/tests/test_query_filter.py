@@ -8,6 +8,7 @@ import pytest
 
 from workflow.lib.query_filter import (
     QUERY_CACHE_MAX_AGE_SECONDS,
+    compute_query_hash,
     expand_search_specs,
     post_filter,
     query_dicoms,
@@ -1036,3 +1037,37 @@ class TestExpandSearchSpecs:
         # Results from all per-subject queries are concatenated
         assert len(result_df) == 2
         assert set(result_df["subject"]) == {"sub01", "sub02"}
+
+
+class TestComputeQueryHashSelect:
+    """The query hash must change when select / select_from_field change."""
+
+    @staticmethod
+    def _spec(**extra):
+        return [{"dicom_query": {"StudyDescription": "x"}, **extra}]
+
+    def test_same_specs_same_hash(self):
+        a = self._spec(select=["A", "B"])
+        b = self._spec(select=["A", "B"])
+        assert compute_query_hash(a) == compute_query_hash(b)
+
+    def test_select_changes_hash(self):
+        base = compute_query_hash(self._spec())
+        with_select = compute_query_hash(self._spec(select=["A"]))
+        other_select = compute_query_hash(self._spec(select=["A", "B"]))
+        assert len({base, with_select, other_select}) == 3
+
+    def test_select_from_field_changes_hash(self):
+        a = compute_query_hash(self._spec(select=["A"]))
+        b = compute_query_hash(self._spec(select=["A"], select_from_field="patient_id"))
+        assert a != b
+
+    def test_cache_invalidated_when_select_changes(self, tmp_path):
+        tsv = tmp_path / "studies.tsv"
+        tsv.write_text("a\tb\n")
+        hash_file = tmp_path / "query_hash.txt"
+        old = compute_query_hash(self._spec(select=["A"]))
+        hash_file.write_text(old)
+        assert should_skip_query(tsv, hash_file, old) is True
+        new = compute_query_hash(self._spec(select=["A", "B"]))
+        assert should_skip_query(tsv, hash_file, new) is False
