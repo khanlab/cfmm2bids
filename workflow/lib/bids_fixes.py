@@ -532,8 +532,17 @@ def _mp2rage_robust_func(inv1: np.ndarray, inv2: np.ndarray, beta: float) -> np.
 
 
 def _rootsquares_pos(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
-    """Positive root of ax^2 + bx + c = 0."""
-    return (-b + np.sqrt(b**2 - 4 * a * c)) / (2 * a)
+    """Positive root of ax^2 + bx + c = 0.
+
+    Uses the equivalent form 2c / (-b - sqrt(b^2 - 4ac)) rather than
+    (-b + sqrt(b^2 - 4ac)) / 2a, which is 0/0 when a == 0 (UNI exactly at
+    mid-range) and suffers catastrophic cancellation when a is small.
+    Falls back to the standard form where the denominator vanishes (b == 0,
+    e.g. zero-padded background).
+    """
+    sqrt_disc = np.sqrt(b**2 - 4 * a * c)
+    denom = -b - sqrt_disc
+    return np.where(denom != 0, (2 * c) / denom, (-b + sqrt_disc) / (2 * a))
 
 
 def _rootsquares_neg(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
