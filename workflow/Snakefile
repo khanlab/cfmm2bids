@@ -143,7 +143,6 @@ _bids_uncorr_targets = (
 )
 
 
-
 rule all:
     input:
         expand(
@@ -862,5 +861,3 @@ rule clean_uncorr:
         "logs/clean_final_uncorr_bids/clean.log",
     script:
         "scripts/clean_final_bids.py"
-
-
