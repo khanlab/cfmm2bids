@@ -52,7 +52,7 @@ search_specs:
       - AS453F1
       - AS453F2
       - AS453F2e
-      - AS453F3
+      - AS453F5
       - AS452M1
       - AS452M2
       - AS452M3
@@ -67,6 +67,7 @@ search_specs:
         # constant: 'pilot'  # Use constant value for all subjects (OPTIONAL)
         map:
           'As436M1': AS436M1
+          'AS453F5': AS453F3 #seemingly typo at the scanner
       session:
         source: StudyDate
 
@@ -96,7 +97,7 @@ search_specs:
         source: PatientName
         pattern: '_(AS[0-9]+[MF][a-z0-9]+)$'
         sanitize: true
-        remap:
+        map:
           AS209M5e: AS209M6
       session:
         source: StudyDate
