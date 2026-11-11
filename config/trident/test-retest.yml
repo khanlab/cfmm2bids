@@ -109,10 +109,3 @@ download_cache: "results/download_cache"
 
 
 
-# EXTRA: Link to SPIM microscopy datasets
-link_to_spim: False
-
-#lightsheet bids data to link to
-#  indexed by session number, so different batches can use different sessions
-
-
