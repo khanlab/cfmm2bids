@@ -79,6 +79,36 @@ def update_json(path: Path, spec: dict) -> bool:
     return True
 
 
+@register_fix("rename_json_keys")
+def rename_json_keys(path: Path, spec: dict) -> bool:
+    """Rename keys in a JSON sidecar according to a `rename` mapping.
+
+    For each ``old: new`` pair in ``rename``, when ``old`` is present its
+    value is moved to ``new`` (overwriting ``new`` if already present) and
+    ``old`` is removed.  Pairs whose ``old`` key is absent are skipped, so the
+    fix is idempotent.  Returns ``True`` only when at least one key was
+    actually renamed.
+    """
+    if path.suffix != ".json":
+        return False
+    rename = spec.get("rename", {})
+    if not rename:
+        return False
+    with open(path) as f:
+        data = json.load(f)
+    changed = False
+    for old, new in rename.items():
+        if old in data:
+            data[new] = data.pop(old)
+            changed = True
+    if not changed:
+        return False
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    return True
+
+
 @register_fix("copy_from_path", scope="session")
 def copy_from_path(session_dir: Path, spec: dict) -> int:
     """Copy one file from a globbed custom source path into the BIDS session directory.
@@ -182,6 +212,108 @@ def copy_from_path(session_dir: Path, spec: dict) -> int:
         logger.info(f"copy_from_path: copied {src_path} -> {dst_path}")
 
     return len(operations)
+
+
+@register_fix("regenerate_scans_tsv")
+def regenerate_scans_tsv(path: Path, spec: dict) -> bool:
+    """Rebuild a ``*_scans.tsv`` so its ``filename`` column matches the files
+    actually present after all renaming/splitting fixes.
+
+    ``path`` is the existing (heudiconv-generated) ``*_scans.tsv``.  Its rows
+    still point at pre-rename filenames, but their ``acq_time`` values are the
+    only record of acquisition order and timing, so they are harvested and
+    re-attached to the current files by matching each file's sidecar
+    ``AcquisitionTime`` (time-of-day) against the original ``acq_time``.
+
+    Every imaging file (``*.nii`` / ``*.nii.gz``) under the session directory
+    is listed once, sorted by ``acq_time`` (row order = acquisition order).
+    Files with no matchable acquisition time (e.g. derived images) get
+    ``acq_time`` = ``n/a`` and sort last.  The path convention (session- vs
+    subject-relative) is inherited from the original file.
+
+    Spec fields
+    -----------
+    datatypes : list[str], optional
+        Restrict listed files to these datatype folders (e.g. ``["anat",
+        "dwi"]``).  Defaults to every datatype folder found.
+    """
+    if not path.name.endswith("_scans.tsv"):
+        return False
+
+    session_dir = path.parent
+
+    def time_of_day(value: str) -> str:
+        """HH:MM:SS from 'YYYY-MM-DDThh:mm:ss[.ffffff]' or 'hh:mm:ss[.ffffff]'."""
+        s = value.strip()
+        if not s or s == "n/a":
+            return ""
+        if "T" in s:
+            s = s.split("T", 1)[1]
+        return s.split(".", 1)[0][:8]
+
+    # 1. Harvest acq_time (keyed by time-of-day) and detect path convention.
+    time_to_acqtime: dict[str, str] = {}
+    subject_relative = False
+    lines = path.read_text().splitlines()
+    if lines:
+        header = lines[0].split("\t")
+        if "filename" in header:
+            fn_idx = header.index("filename")
+            at_idx = header.index("acq_time") if "acq_time" in header else None
+            for line in lines[1:]:
+                cells = line.split("\t")
+                if len(cells) <= fn_idx or not cells[fn_idx].strip():
+                    continue
+                subject_relative = cells[fn_idx].strip().startswith("ses-")
+                if at_idx is not None and len(cells) > at_idx:
+                    acq_time = cells[at_idx].strip()
+                    key = time_of_day(acq_time)
+                    if key and acq_time not in ("", "n/a"):
+                        time_to_acqtime.setdefault(key, acq_time)
+
+    base_dir = session_dir.parent if subject_relative else session_dir
+
+    # 2. Collect current imaging files (optionally restricted to datatypes).
+    datatypes = spec.get("datatypes")
+    nii_files = sorted(
+        p
+        for p in session_dir.rglob("*.nii*")
+        if p.name.endswith((".nii", ".nii.gz"))
+        and (datatypes is None or p.parent.name in set(datatypes))
+    )
+    if not nii_files:
+        logger.warning(f"regenerate_scans_tsv: no imaging files under {session_dir}")
+        return False
+
+    # 3. Attach acq_time via each file's sidecar AcquisitionTime.
+    rows: list[tuple[str, str]] = []
+    for nii in nii_files:
+        rel = nii.relative_to(base_dir).as_posix()
+        json_path = (
+            nii.with_suffix("").with_suffix(".json")
+            if nii.name.endswith(".nii.gz")
+            else nii.with_suffix(".json")
+        )
+        acq_time = "n/a"
+        if json_path.exists():
+            try:
+                meta = json.loads(json_path.read_text())
+                key = time_of_day(str(meta.get("AcquisitionTime", "")))
+                if key in time_to_acqtime:
+                    acq_time = time_to_acqtime[key]
+            except (OSError, ValueError):
+                pass
+        rows.append((rel, acq_time))
+
+    # 4. Sort by acq_time (acquisition order); unmatched ('n/a') last.
+    rows.sort(key=lambda r: (r[1] == "n/a", r[1], r[0]))
+
+    # 5. Overwrite the scans.tsv.
+    out = ["filename\tacq_time"] + [f"{fn}\t{at}" for fn, at in rows]
+    path.write_text("\n".join(out) + "\n")
+
+    logger.info(f"regenerate_scans_tsv: wrote {len(rows)} rows to {path.name}")
+    return True
 
 
 def _find_bids_root(path: Path) -> Path | None:
