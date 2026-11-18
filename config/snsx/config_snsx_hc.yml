@@ -465,12 +465,12 @@ post_convert_fixes:
   - name: import_sp2d_dwi
     action: copy_from_path
     src: 
-      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
-      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bvec"
-      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bval"
-      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff.bmat"
-      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_slspec.txt"
-      - "/cifs/baron/studyDataRaw/2024_epilepsy_derivatives/recons_v3/*_SNSX_{subject}/cb_sp2d_diff_phase.nii.gz"
+      - "/nfs/snsx/sourcedata/spiral_recons/*_SNSX_{subject}/cb_sp2d_diff.nii.gz"
+      - "/nfs/snsx/sourcedata/spiral_recons/*_SNSX_{subject}/cb_sp2d_diff.bvec"
+      - "/nfs/snsx/sourcedata/spiral_recons/*_SNSX_{subject}/cb_sp2d_diff.bval"
+      - "/nfs/snsx/sourcedata/spiral_recons/*_SNSX_{subject}/cb_sp2d_diff.bmat"
+      - "/nfs/snsx/sourcedata/spiral_recons/*_SNSX_{subject}/cb_sp2d_diff_slspec.txt"
+      - "/nfs/snsx/sourcedata/spiral_recons/*_SNSX_{subject}/cb_sp2d_diff_phase.nii.gz"
     dst: 
       - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.nii.gz"
       - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bvec"
@@ -478,7 +478,7 @@ post_convert_fixes:
       - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.bmat"
       - "dwi/sub-{subject}_ses-{session}_acq-mde_dwi.slspec.txt"
       - "dwi/sub-{subject}_ses-{session}_acq-mde_part-phase_dwi.nii.gz"
-    required: true
+    required: false  # many older sessions have no spiral recon
 
 
 
