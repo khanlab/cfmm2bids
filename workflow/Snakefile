@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from lib.bids_fixes import get_fix_inputs
+from lib.bids_fixes import get_fix_input_status, get_fix_inputs
 from lib.query_filter import (
     compute_query_hash,
     post_filter,
@@ -156,6 +156,7 @@ rule all:
         final_bids_dir / ".bidsignore",
         stage_convert / "qc/aggregate_report.html",
         stage_fix / "qc/aggregate_report.html",
+        stage_fix / "qc/fix_external_inputs.tsv",
         _bids_uncorr_targets,
 
 
@@ -443,6 +444,52 @@ def get_post_convert_fix_external_inputs(wildcards):
     return get_fix_inputs(
         config.get("post_convert_fixes"), wildcards.subject, wildcards.session
     )
+
+
+def get_all_fix_input_status(wildcards):
+    """Status rows (found/missing/multiple_matches) for every subject/session."""
+    rows = []
+    for subject, session in zip(subjects, sessions):
+        rows.extend(
+            get_fix_input_status(config.get("post_convert_fixes"), subject, session)
+        )
+    return rows
+
+
+rule check_fix_inputs:
+    """
+    QC table of external files read by post_convert_fixes (e.g. copy_from_path
+    sources), one row per subject/session/source pattern with its status.
+    Does not depend on the fix jobs, so it can be built on its own
+    (`snakemake check_fix_inputs -f`) even when required sources are missing.
+    """
+    input:
+        query_tsv=query_tsv_path,
+    params:
+        rows=get_all_fix_input_status,
+    output:
+        tsv=stage_fix / "qc/fix_external_inputs.tsv",
+    localrule: True
+    run:
+        columns = [
+            "subject",
+            "session",
+            "fix",
+            "action",
+            "status",
+            "required",
+            "src_pattern",
+            "dst",
+            "path",
+        ]
+        table = pd.DataFrame(params.rows, columns=columns)
+        table.to_csv(output.tsv, sep="\t", index=False)
+        not_found = table[table.status != "found"]
+        n_sessions = not_found[["subject", "session"]].drop_duplicates().shape[0]
+        print(
+            f"check_fix_inputs: {len(not_found)} of {len(table)} external fix "
+            f"sources not found ({n_sessions} sessions); see {output.tsv}"
+        )
 
 
 rule post_convert_fix:

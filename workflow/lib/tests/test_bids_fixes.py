@@ -18,6 +18,7 @@ from workflow.lib.bids_fixes import (
     fix_intended_for,
     fix_orientation_quadruped,
     gen_mp2rage_uni_den,
+    get_fix_input_status,
     get_fix_inputs,
     register_fix,
     remove_duplicate_niftis,
@@ -315,7 +316,7 @@ class TestFixInputs:
         FIX_REGISTRY.pop(test_name, None)
 
         def resolver(spec, subject, session):
-            return [f"/data/{subject}_{session}.txt"]
+            return [{"status": "found", "path": f"/d/{subject}.txt", "required": True}]
 
         @register_fix(test_name, inputs=resolver)
         def test_func(path, spec):
@@ -398,6 +399,67 @@ class TestFixInputs:
             }
         ]
         assert get_fix_inputs(fixes, "01", "pre") == []
+
+    def test_get_fix_inputs_lists_all_missing_required(self, tmp_path):
+        fixes = [
+            {
+                "name": "import",
+                "action": "copy_from_path",
+                "src": [
+                    str(tmp_path / "a_{subject}.nii.gz"),
+                    str(tmp_path / "b_{subject}.bval"),
+                ],
+                "dst": ["dwi/a.nii.gz", "dwi/b.bval"],
+            }
+        ]
+        with pytest.raises(FileNotFoundError) as exc:
+            get_fix_inputs(fixes, "01", "pre")
+        msg = str(exc.value)
+        assert "2 required fix source(s) missing" in msg
+        assert "a_01.nii.gz" in msg and "b_01.bval" in msg
+
+    def test_get_fix_inputs_multiple_matches_raises(self, tmp_path):
+        (tmp_path / "x1_01.nii.gz").write_text("1")
+        (tmp_path / "x2_01.nii.gz").write_text("2")
+        fixes = [
+            {
+                "action": "copy_from_path",
+                "src": str(tmp_path / "x*_{subject}.nii.gz"),
+                "dst": "dwi/x.nii.gz",
+                "required": False,
+            }
+        ]
+        with pytest.raises(ValueError, match="more than one file"):
+            get_fix_inputs(fixes, "01", "pre")
+
+    def test_get_fix_input_status_rows(self, tmp_path):
+        source_root, source_dir = self._make_sources(tmp_path)
+        fixes = [
+            {"name": "rm", "action": "remove", "pattern": "anat/*.bval"},
+            {
+                "name": "import",
+                "action": "copy_from_path",
+                "src": [
+                    str(source_root / "*_SNSX_{subject}" / "cb_sp2d_diff.nii.gz"),
+                    str(source_root / "*_SNSX_{subject}" / "missing.bmat"),
+                ],
+                "dst": [
+                    "dwi/sub-{subject}_ses-{session}_dwi.nii.gz",
+                    "dwi/sub-{subject}_ses-{session}_dwi.bmat",
+                ],
+                "required": True,
+            },
+        ]
+        rows = get_fix_input_status(fixes, "01", "pre")
+        assert [r["status"] for r in rows] == ["found", "missing"]
+        assert rows[0]["path"] == str(source_dir / "cb_sp2d_diff.nii.gz")
+        assert rows[1]["path"] == ""
+        assert rows[1]["required"] is True
+        assert rows[1]["dst"] == "dwi/sub-01_ses-pre_dwi.bmat"
+        assert all(
+            r["subject"] == "01" and r["session"] == "pre" and r["fix"] == "import"
+            for r in rows
+        )
 
     def test_get_fix_inputs_unknown_action_raises(self):
         with pytest.raises(ValueError, match="Unknown fix type"):

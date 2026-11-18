@@ -29,7 +29,7 @@ def register_fix(
     name: str | None = None,
     grouped: bool = False,
     scope: Literal["path", "session"] = "path",
-    inputs: Callable[[dict, str, str], list[str]] | None = None,
+    inputs: Callable[[dict, str, str], list[dict]] | None = None,
 ):
     """Decorator to register a fix function.
 
@@ -44,10 +44,13 @@ def register_fix(
     grouped=True -> runner should call func(list_of_paths, ctx)
     grouped=False -> runner should call func(path, ctx) for each match
 
-    inputs -> optional resolver ``inputs(spec, subject, session) -> list[str]``
-    returning files outside the BIDS dataset that the fix reads. The Snakefile
-    declares these as inputs of ``post_convert_fix`` so that Snakemake checks
-    they exist and reruns the fix when they change.
+    inputs -> optional resolver ``inputs(spec, subject, session) -> list[dict]``
+    describing files outside the BIDS dataset that the fix reads. Each row has
+    at least ``status`` ("found" | "missing" | "multiple_matches"), ``path``,
+    ``src_pattern`` and ``required``. Resolvers must not raise for missing
+    files; ``get_fix_inputs`` decides what is fatal. The Snakefile declares the
+    found paths as inputs of ``post_convert_fix`` so that Snakemake checks they
+    exist and reruns the fix when they change, and writes all rows to a QC TSV.
     """
     if scope not in {"path", "session"}:
         raise ValueError(f"Invalid fix scope: {scope}")
@@ -68,14 +71,17 @@ def register_fix(
     return decorator
 
 
-def get_fix_inputs(fixes: list[dict] | None, subject: str, session: str) -> list[str]:
-    """Collect external input files declared by the configured fixes.
+def get_fix_input_status(
+    fixes: list[dict] | None, subject: str, session: str
+) -> list[dict]:
+    """Describe every external input declared by the configured fixes.
 
-    Calls each registered fix's ``inputs`` resolver (if any) for the given
-    subject/session. Raises if a fix action is unknown, so config typos surface
-    when the DAG is built rather than inside a job.
+    Returns one row per source pattern (found, missing or ambiguous) with the
+    fix name/action and subject/session added, for QC reporting. Never raises
+    for missing files; raises ``ValueError`` for unknown fix actions or
+    invalid fix specs.
     """
-    files: list[str] = []
+    rows: list[dict] = []
     for fix in fixes or []:
         action = fix.get("action")
         meta = FIX_REGISTRY.get(action)
@@ -84,9 +90,49 @@ def get_fix_inputs(fixes: list[dict] | None, subject: str, session: str) -> list
         resolver = meta.get("inputs")
         if resolver is None:
             continue
-        for path in resolver(fix, subject, session):
-            if path not in files:
-                files.append(path)
+        for row in resolver(fix, subject, session):
+            rows.append(
+                {
+                    "subject": subject,
+                    "session": session,
+                    "fix": fix.get("name", action),
+                    "action": action,
+                    **row,
+                }
+            )
+    return rows
+
+
+def get_fix_inputs(fixes: list[dict] | None, subject: str, session: str) -> list[str]:
+    """Collect external input files declared by the configured fixes.
+
+    Returns the found paths (for use as Snakemake inputs). Raises
+    ``FileNotFoundError`` listing *all* missing required sources for the
+    session, and ``ValueError`` if any source pattern matches more than one
+    file, so problems surface when the DAG is built rather than inside a job.
+    """
+    rows = get_fix_input_status(fixes, subject, session)
+
+    ambiguous = [r for r in rows if r["status"] == "multiple_matches"]
+    if ambiguous:
+        details = "\n".join(f"  [{r['fix']}] {r['src_pattern']}" for r in ambiguous)
+        raise ValueError(
+            f"sub-{subject}_ses-{session}: fix source patterns matched more than "
+            f"one file (expected exactly 1):\n{details}"
+        )
+
+    missing = [r for r in rows if r["status"] == "missing" and r["required"]]
+    if missing:
+        details = "\n".join(f"  [{r['fix']}] {r['src_pattern']}" for r in missing)
+        raise FileNotFoundError(
+            f"sub-{subject}_ses-{session}: {len(missing)} required fix source(s) "
+            f"missing (set 'required: false' to make them optional):\n{details}"
+        )
+
+    files: list[str] = []
+    for r in rows:
+        if r["status"] == "found" and r["path"] not in files:
+            files.append(r["path"])
     return files
 
 
@@ -115,7 +161,9 @@ def update_json(path: Path, spec: dict) -> bool:
     return True
 
 
-def resolve_copy_pairs(spec: dict) -> list[tuple[Path, Path]]:
+def resolve_copy_pairs(
+    spec: dict, status: list[dict] | None = None
+) -> list[tuple[Path, Path]]:
     """Resolve ``copy_from_path`` src/dst templates into concrete pairs.
 
     Returns a list of ``(src_path, dst_rel)`` where ``src_path`` is the single
@@ -125,6 +173,10 @@ def resolve_copy_pairs(spec: dict) -> list[tuple[Path, Path]]:
 
     Raises ``FileNotFoundError`` if a required source has no match and
     ``ValueError`` for invalid specs or ambiguous (multiple) matches.
+
+    If ``status`` is a list, one row per source pattern is appended to it
+    (``status`` = found / missing / multiple_matches) and missing or ambiguous
+    sources are skipped instead of raising. Invalid specs still raise.
     """
     subject = str(spec.get("subject", ""))
     session = str(spec.get("session", ""))
@@ -193,6 +245,25 @@ def resolve_copy_pairs(spec: dict) -> list[tuple[Path, Path]]:
             raise ValueError("copy_from_path 'dst' cannot include '..' path segments")
 
         matches = sorted(glob(src_pattern, recursive=True))
+        if status is not None:
+            if len(matches) == 1:
+                state = "found"
+            elif matches:
+                state = "multiple_matches"
+            else:
+                state = "missing"
+            status.append(
+                {
+                    "status": state,
+                    "required": required,
+                    "src_pattern": src_pattern,
+                    "dst": str(dst_rel),
+                    "path": ";".join(matches),
+                }
+            )
+            if state != "found":
+                continue
+
         if len(matches) == 0:
             msg = f"copy_from_path: no matches for source pattern: {src_pattern}"
             if required:
@@ -210,10 +281,11 @@ def resolve_copy_pairs(spec: dict) -> list[tuple[Path, Path]]:
     return pairs
 
 
-def _copy_from_path_inputs(spec: dict, subject: str, session: str) -> list[str]:
-    """Snakemake input resolver for ``copy_from_path``."""
-    full_spec = {**spec, "subject": subject, "session": session}
-    return [str(src) for src, _ in resolve_copy_pairs(full_spec)]
+def _copy_from_path_inputs(spec: dict, subject: str, session: str) -> list[dict]:
+    """Input resolver for ``copy_from_path``: one status row per source pattern."""
+    rows: list[dict] = []
+    resolve_copy_pairs({**spec, "subject": subject, "session": session}, rows)
+    return rows
 
 
 @register_fix("copy_from_path", scope="session", inputs=_copy_from_path_inputs)
