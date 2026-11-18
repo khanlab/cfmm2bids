@@ -1,6 +1,7 @@
 """Tests for the bids_fixes module."""
 
 import json
+from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -17,9 +18,11 @@ from workflow.lib.bids_fixes import (
     fix_intended_for,
     fix_orientation_quadruped,
     gen_mp2rage_uni_den,
+    get_fix_inputs,
     register_fix,
     remove_duplicate_niftis,
     remove_file,
+    resolve_copy_pairs,
     split_multiecho_nifti,
     update_json,
 )
@@ -295,6 +298,113 @@ class TestCopyFromPath:
         }
         with pytest.raises(ValueError, match="both be strings or both be lists"):
             copy_from_path(session_dir, spec)
+
+
+class TestFixInputs:
+    """Tests for declared external inputs (used by the Snakefile)."""
+
+    def _make_sources(self, tmp_path):
+        source_dir = tmp_path / "offline" / "20240501_SNSX_01"
+        source_dir.mkdir(parents=True)
+        for name in ("cb_sp2d_diff.nii.gz", "cb_sp2d_diff.bval"):
+            (source_dir / name).write_text(name)
+        return tmp_path / "offline", source_dir
+
+    def test_register_fix_stores_inputs_resolver(self):
+        test_name = "_test_inputs_fix"
+        FIX_REGISTRY.pop(test_name, None)
+
+        def resolver(spec, subject, session):
+            return [f"/data/{subject}_{session}.txt"]
+
+        @register_fix(test_name, inputs=resolver)
+        def test_func(path, spec):
+            return True
+
+        assert FIX_REGISTRY[test_name]["inputs"] is resolver
+        FIX_REGISTRY.pop(test_name, None)
+
+    def test_register_fix_inputs_default_none(self):
+        assert FIX_REGISTRY["remove"]["inputs"] is None
+        assert FIX_REGISTRY["copy_from_path"]["inputs"] is not None
+
+    def test_register_fix_rejects_non_callable_inputs(self):
+        with pytest.raises(ValueError, match="must be callable"):
+            register_fix("_test_bad_inputs", inputs=["not", "callable"])
+
+    def test_resolve_copy_pairs(self, tmp_path):
+        source_root, source_dir = self._make_sources(tmp_path)
+        spec = {
+            "src": [
+                str(source_root / "*_SNSX_{subject}" / "cb_sp2d_diff.nii.gz"),
+                str(source_root / "*_SNSX_{subject}" / "cb_sp2d_diff.bval"),
+            ],
+            "dst": [
+                "dwi/sub-{subject}_ses-{session}_dwi.nii.gz",
+                "dwi/sub-{subject}_ses-{session}_dwi.bval",
+            ],
+            "subject": "01",
+            "session": "pre",
+        }
+        pairs = resolve_copy_pairs(spec)
+        assert pairs == [
+            (
+                source_dir / "cb_sp2d_diff.nii.gz",
+                Path("dwi/sub-01_ses-pre_dwi.nii.gz"),
+            ),
+            (source_dir / "cb_sp2d_diff.bval", Path("dwi/sub-01_ses-pre_dwi.bval")),
+        ]
+
+    def test_get_fix_inputs_collects_copy_sources(self, tmp_path):
+        source_root, source_dir = self._make_sources(tmp_path)
+        fixes = [
+            {"name": "rm", "action": "remove", "pattern": "anat/*.bval"},
+            {
+                "name": "import",
+                "action": "copy_from_path",
+                "src": [
+                    str(source_root / "*_SNSX_{subject}" / "cb_sp2d_diff.nii.gz"),
+                    str(source_root / "*_SNSX_{subject}" / "cb_sp2d_diff.bval"),
+                ],
+                "dst": [
+                    "dwi/sub-{subject}_ses-{session}_dwi.nii.gz",
+                    "dwi/sub-{subject}_ses-{session}_dwi.bval",
+                ],
+            },
+        ]
+        assert get_fix_inputs(fixes, "01", "pre") == [
+            str(source_dir / "cb_sp2d_diff.nii.gz"),
+            str(source_dir / "cb_sp2d_diff.bval"),
+        ]
+
+    def test_get_fix_inputs_missing_required_raises(self, tmp_path):
+        fixes = [
+            {
+                "action": "copy_from_path",
+                "src": str(tmp_path / "missing_{subject}.nii.gz"),
+                "dst": "dwi/sub-{subject}_ses-{session}_dwi.nii.gz",
+            }
+        ]
+        with pytest.raises(FileNotFoundError):
+            get_fix_inputs(fixes, "01", "pre")
+
+    def test_get_fix_inputs_missing_optional_skipped(self, tmp_path):
+        fixes = [
+            {
+                "action": "copy_from_path",
+                "src": str(tmp_path / "missing_{subject}.nii.gz"),
+                "dst": "dwi/sub-{subject}_ses-{session}_dwi.nii.gz",
+                "required": False,
+            }
+        ]
+        assert get_fix_inputs(fixes, "01", "pre") == []
+
+    def test_get_fix_inputs_unknown_action_raises(self):
+        with pytest.raises(ValueError, match="Unknown fix type"):
+            get_fix_inputs([{"action": "does_not_exist"}], "01", "pre")
+
+    def test_get_fix_inputs_none(self):
+        assert get_fix_inputs(None, "01", "pre") == []
 
 
 class TestRemoveFile:

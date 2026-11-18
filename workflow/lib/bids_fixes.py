@@ -29,6 +29,7 @@ def register_fix(
     name: str | None = None,
     grouped: bool = False,
     scope: Literal["path", "session"] = "path",
+    inputs: Callable[[dict, str, str], list[str]] | None = None,
 ):
     """Decorator to register a fix function.
 
@@ -37,21 +38,56 @@ def register_fix(
         "func": <callable>,
         "grouped": bool,
         "scope": "path" | "session",
+        "inputs": <callable> | None,
       }
 
     grouped=True -> runner should call func(list_of_paths, ctx)
     grouped=False -> runner should call func(path, ctx) for each match
+
+    inputs -> optional resolver ``inputs(spec, subject, session) -> list[str]``
+    returning files outside the BIDS dataset that the fix reads. The Snakefile
+    declares these as inputs of ``post_convert_fix`` so that Snakemake checks
+    they exist and reruns the fix when they change.
     """
     if scope not in {"path", "session"}:
         raise ValueError(f"Invalid fix scope: {scope}")
+    if inputs is not None and not callable(inputs):
+        raise ValueError("Fix 'inputs' resolver must be callable")
 
     def decorator(func: Callable):
         fix_name = name or func.__name__
-        meta = {"func": func, "grouped": bool(grouped), "scope": scope}
+        meta = {
+            "func": func,
+            "grouped": bool(grouped),
+            "scope": scope,
+            "inputs": inputs,
+        }
         FIX_REGISTRY[fix_name] = meta
         return func
 
     return decorator
+
+
+def get_fix_inputs(fixes: list[dict] | None, subject: str, session: str) -> list[str]:
+    """Collect external input files declared by the configured fixes.
+
+    Calls each registered fix's ``inputs`` resolver (if any) for the given
+    subject/session. Raises if a fix action is unknown, so config typos surface
+    when the DAG is built rather than inside a job.
+    """
+    files: list[str] = []
+    for fix in fixes or []:
+        action = fix.get("action")
+        meta = FIX_REGISTRY.get(action)
+        if meta is None:
+            raise ValueError(f"Unknown fix type: {action}")
+        resolver = meta.get("inputs")
+        if resolver is None:
+            continue
+        for path in resolver(fix, subject, session):
+            if path not in files:
+                files.append(path)
+    return files
 
 
 # --- fix implementations ---
@@ -79,14 +115,16 @@ def update_json(path: Path, spec: dict) -> bool:
     return True
 
 
-@register_fix("copy_from_path", scope="session")
-def copy_from_path(session_dir: Path, spec: dict) -> int:
-    """Copy one file from a globbed custom source path into the BIDS session directory.
+def resolve_copy_pairs(spec: dict) -> list[tuple[Path, Path]]:
+    """Resolve ``copy_from_path`` src/dst templates into concrete pairs.
 
-    Uses shell-style glob syntax in ``src`` (`*`, `?`, `[abc]`, `**`).
-    Recursive matching requires ``**`` in the source pattern.
-    ``src``/``dst`` can each be either a single string or a list of strings.
-    Lists are processed as zipped pairs.
+    Returns a list of ``(src_path, dst_rel)`` where ``src_path`` is the single
+    absolute file matched by the ``src`` glob and ``dst_rel`` is relative to the
+    session directory. Shared by the fix itself and by its Snakemake input
+    resolver, so the files Snakemake tracks are exactly the files copied.
+
+    Raises ``FileNotFoundError`` if a required source has no match and
+    ``ValueError`` for invalid specs or ambiguous (multiple) matches.
     """
     subject = str(spec.get("subject", ""))
     session = str(spec.get("session", ""))
@@ -125,7 +163,7 @@ def copy_from_path(session_dir: Path, spec: dict) -> int:
             "copy_from_path requires 'src' and 'dst' lists to have the same length"
         )
 
-    operations: list[tuple[Path, Path]] = []
+    pairs: list[tuple[Path, Path]] = []
     for one_src_template, one_dst_template in zip(
         src_templates, dst_templates, strict=True
     ):
@@ -167,13 +205,35 @@ def copy_from_path(session_dir: Path, spec: dict) -> int:
                 f"copy_from_path expected 1 match for '{src_pattern}', got {len(matches)}"
             )
 
-        src_path = Path(matches[0])
-        dst_path = session_dir / dst_rel
-        resolved_dst = dst_path.resolve()
-        resolved_session = session_dir.resolve()
-        if not resolved_dst.is_relative_to(resolved_session):
-            raise ValueError("copy_from_path destination escapes the session directory")
+        pairs.append((Path(matches[0]), dst_rel))
 
+    return pairs
+
+
+def _copy_from_path_inputs(spec: dict, subject: str, session: str) -> list[str]:
+    """Snakemake input resolver for ``copy_from_path``."""
+    full_spec = {**spec, "subject": subject, "session": session}
+    return [str(src) for src, _ in resolve_copy_pairs(full_spec)]
+
+
+@register_fix("copy_from_path", scope="session", inputs=_copy_from_path_inputs)
+def copy_from_path(session_dir: Path, spec: dict) -> int:
+    """Copy one file from a globbed custom source path into the BIDS session directory.
+
+    Uses shell-style glob syntax in ``src`` (`*`, `?`, `[abc]`, `**`).
+    Recursive matching requires ``**`` in the source pattern.
+    ``src``/``dst`` can each be either a single string or a list of strings.
+    Lists are processed as zipped pairs.
+
+    The matched source files are also declared as Snakemake inputs (see
+    ``_copy_from_path_inputs``), so missing or updated sources are tracked.
+    """
+    resolved_session = session_dir.resolve()
+    operations: list[tuple[Path, Path]] = []
+    for src_path, dst_rel in resolve_copy_pairs(spec):
+        dst_path = session_dir / dst_rel
+        if not dst_path.resolve().is_relative_to(resolved_session):
+            raise ValueError("copy_from_path destination escapes the session directory")
         operations.append((src_path, dst_path))
 
     for src_path, dst_path in operations:

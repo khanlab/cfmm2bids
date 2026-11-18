@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from lib.bids_fixes import get_fix_inputs
 from lib.query_filter import (
     compute_query_hash,
     post_filter,
@@ -433,13 +434,25 @@ rule validate_converted:
         "bids-validator-deno {input.bids_dir} --format json_pp -o {output.validator_json} || true"
 
 
+def get_post_convert_fix_external_inputs(wildcards):
+    """Files outside the BIDS dataset read by fixes (e.g. copy_from_path sources).
+
+    Declaring them as inputs lets Snakemake fail early when a required file is
+    missing and rerun the fix when one of them changes.
+    """
+    return get_fix_inputs(
+        config.get("post_convert_fixes"), wildcards.subject, wildcards.session
+    )
+
+
 rule post_convert_fix:
     """
     Copy BIDS dataset and apply post-conversion fixes
-    (defined in config['post_bids_fixes']) sequentially.
+    (defined in config['post_convert_fixes']) sequentially.
     """
     input:
         bids_subj_dir=stage_convert / "bids-staging/sub-{subject}/ses-{session}",
+        external=get_post_convert_fix_external_inputs,
     output:
         bids_subj_dir=directory(stage_fix / "bids-staging/sub-{subject}/ses-{session}"),
         prov_json=stage_fix
