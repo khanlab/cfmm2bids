@@ -363,6 +363,14 @@ brace matching is not supported; if needed, point `src` at a directory/symlink
 without braces). `src` should be an absolute path. `src` and `dst` can each be
 either a string or a list of strings; list mode uses zipped `src[i] -> dst[i]`.
 
+The files matched by `copy_from_path` are declared as Snakemake inputs of
+`post_convert_fix` (resolved when the DAG is built). A missing `required` source
+therefore fails the run up front, and an updated source file triggers a rerun
+of that session's fixes and everything downstream. Use `required: false` when
+some sessions legitimately lack the file. Custom fixes can declare their own
+external files via `@register_fix(..., inputs=resolver)`, where
+`resolver(spec, subject, session)` returns a list of paths.
+
 ### Other Options
 - `final_bids_dir`: Final output directory (default: `bids`)
 - `stages`: Customize intermediate stage directories

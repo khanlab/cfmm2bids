@@ -113,6 +113,9 @@ Path(snakemake.output.prov_json).write_text(
             "session": snakemake.wildcards.session,
             "fixes_used": fixes_used,
             "files_modified": num_changes,
+            "external_inputs": bids_fixes.get_fix_input_status(
+                fixes, snakemake.wildcards.subject, snakemake.wildcards.session
+            ),
         },
         indent=2,
     )
